@@ -3,7 +3,6 @@ import threading
 from rfd.missions_manager.app import main as mission_app
 from rfd.flight_sessions_manager.app import main as session_app
 
-from rfd.init_tailscale_oauth import tailscale_oauth_init
 
 def run_mission():
     mission_app()
@@ -12,7 +11,6 @@ def run_session():
     session_app()
 
 if __name__ == "__main__":
-    tailscale_oauth_init()
 
     t1 = threading.Thread(target=run_mission)
     t2 = threading.Thread(target=run_session)

@@ -13,6 +13,9 @@ from tech_utils.db import get_conn
 
 def validate_token():
     data = request.get_json()
+    if not data:
+        return jsonify({"status": "error", "reason": "Invalid or missing JSON body"}), 400
+
     token = data.get("token")
 
     if not token:
@@ -25,14 +28,14 @@ def validate_token():
                 cur.execute("""
                     SELECT id, is_active_flg, expires_at, session_id
                     FROM grfp_sm_auth_tokens
-                    WHERE token = %s
+                    WHERE token_hash = %s
                     AND tag = 'client'
                     LIMIT 1
                 """, (token,))
                 row = cur.fetchone()
 
                 if not row:
-                    logger.info(f"Token {token} not found in DB")
+                    logger.info(f"Token with hash {token} not found in DB")
                     return jsonify({"status": "error", "reason": "Invalid token"}), 403
 
                 token_id, is_active, expires_at, session_id = row
@@ -58,10 +61,17 @@ GCS_PROOF_TOKEN = os.getenv("GCS_PROOF_TOKEN")
 
 def gcs_ready():
     data = request.get_json()
+    if not data:
+        return jsonify({"status": "error", "reason": "Invalid or missing JSON body"}), 400
+
     mission_id = data.get("mission_id")
+    try:
+        uuid.UUID(mission_id)
+    except Exception:
+        return jsonify({"status": "error", "reason": "Invalid mission_id"}), 400
     gcs_proof_token = data.get("gcs_proof_token")
 
-    if not GCS_PROOF_TOKEN == gcs_proof_token:
+    if gcs_proof_token != GCS_PROOF_TOKEN:
         return jsonify({"status": "error", "reason": "Seems like your are not GCS"}), 400
 
     if not mission_id:
@@ -80,9 +90,9 @@ def gcs_ready():
                     WHERE mission_id = %s
                             """, (mission_id,))
                 
-                status = cur.fetchone()
+                row = cur.fetchone()
                 if status:
-                    status = status[0]
+                    status = row[0]
                 else:
                     logger.error(f"Mission {mission_id} not found")
                     return jsonify({"status": "error", "reason": "mission not found"}), 400
@@ -109,10 +119,11 @@ def gcs_ready():
 
         # Setup VPN
         threading.Thread(
-            target=gcs_client_connection_wait(mission_id, session_id),
-            args=(mission_id, session_id,),
+            target=gcs_client_connection_wait,
+            args=(mission_id, session_id),
             daemon=True
         ).start()
+
 
         logger.info(f"GCS for mission {mission_id} marked as ready. Session: {session_id}")
         return jsonify({
@@ -128,7 +139,14 @@ def gcs_ready():
 
 def get_tailscale_ips():
     data = request.get_json()
+    if not data:
+        return jsonify({"status": "error", "reason": "Invalid or missing JSON body"}), 400
+
     session_id = data.get("session_id")
+    try:
+        uuid.UUID(session_id)
+    except Exception:
+        return jsonify({"status": "error", "reason": "Invalid session_id"}), 400
 
     if not session_id:
         return jsonify({"status": "error", "reason": "Missing session_id"}), 400
@@ -162,8 +180,19 @@ def get_tailscale_ips():
 
 def gcs_session_finish():
     data = request.get_json()
+    if not data:
+        return jsonify({"status": "error", "reason": "Invalid or missing JSON body"}), 400
+
     mission_id = data.get("mission_id")
+    try:
+        uuid.UUID(mission_id)
+    except Exception:
+        return jsonify({"status": "error", "reason": "Invalid mission_id"}), 400
     session_id = data.get("session_id")
+    try:
+        uuid.UUID(session_id)
+    except Exception:
+        return jsonify({"status": "error", "reason": "Invalid session_id"}), 400
     result = data.get("result")
     gcs_proof_token = data.get("gcs_proof_token")
 
@@ -184,13 +213,13 @@ def gcs_session_finish():
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT status
-                    FROM grfp_sm_session
+                    FROM grfp_sm_sessions
                     WHERE session_id = %s
                             """, (mission_id,))
                 
-                status = cur.fetchone()
-                if status:
-                    status = status[0]
+                row = cur.fetchone()
+                if row:
+                    status = row[0]
                 else:
                     logger.error(f"Session {session_id} not found")
                     return jsonify({"status": "error", "reason": "session not found"}), 400
@@ -227,7 +256,7 @@ def gcs_session_finish():
 
         # Finish VPN
         threading.Thread(
-            target=disconnect_session(session_id),
+            target=disconnect_session,
             args=(session_id,),
             daemon=True
         ).start()

@@ -13,9 +13,9 @@ def mission_request():
     logger.info(f"mission-request request received {mission_id}")
     data = request.get_json()
     required = ["user_id", "location", "time_window", "drone_type"]
-
-    if not all(k in data for k in required):
+    if not data or not all(k in data for k in required):
         return jsonify({"status": "error", "reason": "Missing parameters"}), 400
+
 
     try:
         with get_conn() as conn:
@@ -32,6 +32,7 @@ def mission_request():
         subject = f"[GRFP] New Mission Request: {mission_id}"
         body = "\n".join([f"{k}: {data[k]}" for k in required])
         send_email(subject, body, ground_teams_email)
+        logger.info(f"Email sent to ground teams: {ground_teams_email}")
 
         return jsonify({"status": "ok"})
 
@@ -61,12 +62,13 @@ def change_mission_status():
                         WHERE mission_id = %s
                         """, (data['new_status'], now, data['mission_id']))
                 conn.commit()
-                logger.info(f"Succseffully changed status for {data['mission_id']}. New status: {data['new_status']}")
+                logger.info(f"Successfully changed status for {data['mission_id']}. New status: {data['new_status']}")
         
         # Email alert to ground teams
         subject = f"[GRFP] Mission Status Changed"
         body = "\n".join([data['mission_id'] + '\n', 'New status:', data['new_status']])
         send_email(subject, body, ground_teams_email)
+        logger.info(f"Email sent to ground teams: {ground_teams_email}")
 
         return jsonify({"status": "ok"})
     except Exception as e:
@@ -85,6 +87,7 @@ def get_missions_list():
                     cur.execute("""
                         SELECT *
                         FROM grfp_missions
+                        ORDER BY created_at DESC
                     """)
                     rows = cur.fetchall()
                     logger.info(f"Succseffully fetched missions list")
@@ -93,6 +96,7 @@ def get_missions_list():
                         SELECT *
                         FROM grfp_missions
                         WHERE user_id = %s
+                        ORDER BY created_at DESC
                     """, (data['user_id'],))
                     rows = cur.fetchall()
                     logger.info(f"Succseffully fetched missions list for user {data['user_id']}")
@@ -101,5 +105,5 @@ def get_missions_list():
         return jsonify({'status': 'ok', 'data': rows})
                 
     except Exception as e:
-        logger.error(f"Error changing mission status {data['mission_id']}: {e}", exc_info=True)
+        logger.error(f"Error in getting missions list: {e}", exc_info=True)
         return jsonify({"status": "error", "reason": "DB insert error"}), 500

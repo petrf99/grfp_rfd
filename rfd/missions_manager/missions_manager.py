@@ -21,6 +21,7 @@ def alert_pending_tasks():
                 body += f"ID: {r[0]}, Loc: {r[1]}, Time: {r[2]}, Drone: {r[3]}, Created: {r[4]}\n"
 
             send_email("[GRFP] Hourly Alert: Pending Missions", body, ground_teams_email)
+            logger.info(f"Email sent to ground teams: {ground_teams_email}")
 
             logger.info("Pending missions alert sent")
 

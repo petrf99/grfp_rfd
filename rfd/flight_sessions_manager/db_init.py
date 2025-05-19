@@ -12,7 +12,7 @@ def db_init():
                     CREATE TABLE IF NOT EXISTS grfp_sm_auth_tokens (
                     id serial PRIMARY KEY,
                     mission_id UUID,
-                    token varchar(255) UNIQUE NOT NULL,
+                    token_hash varchar(255) UNIQUE NOT NULL,
                     session_id uuid,
                     is_active_flg boolean DEFAULT TRUE,
                     tag varchar(64),

@@ -13,8 +13,6 @@ load_dotenv()
 
 from tech_utils.db import get_conn
 
-TOKEN_EXPIRE_TMP = int(os.getenv("TOKEN_EXPIRE_TMP", 300))
-
 def generate_token():
     raw = uuid.uuid4().hex
     token = hashlib.md5(raw.encode()).hexdigest()
@@ -25,7 +23,10 @@ def generate_token():
 TAILSCALE_API_KEY = os.getenv("TAILSCALE_API_KEY")
 TAILNET = os.getenv("TAILNET")
 
-TS_AUTH_KEY_EXP_HOURS = int(os.getenv("TS_AUTH_KEY_EXP_HOURS"))
+if not TAILSCALE_API_KEY or not TAILNET:
+    raise RuntimeError("TAILSCALE_API_KEY or TAILNET not set in environment")
+
+TS_AUTH_KEY_EXP_HOURS = int(os.getenv("TS_AUTH_KEY_EXP_HOURS", 3))
 
 # Создание нового auth key
 def create_tailscale_auth_key(mission_id, session_id, tag: str = None, ephemeral=True, preauthorized=True, reusable=False, expiry_hours=TS_AUTH_KEY_EXP_HOURS):
@@ -56,20 +57,20 @@ def create_tailscale_auth_key(mission_id, session_id, tag: str = None, ephemeral
 
     if response.status_code == 200:
         data = response.json()
-        logger.info(f"Tailscale Auth Key created. Key: {data['key']}. Expires in: {expiry_hours}d")
+        logger.info(f"Tailscale Auth Key created. Key: {data['key'][-10:]}. Expires in: {expiry_hours}d")
         return data['key'], expiry_hours
     else:
-        logger.info(f"Failed to create key: {response.status_code}, {response.text}")
-        return None
+        logger.error(f"Failed to create key: {response.status_code}, {response.text}")
+        logger.error(f"Tailscale auth_token creation failed\n")
+        raise RuntimeError("Failed to create Tailscale auth key")
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest().upper()
 
 
 def create_token(mission_id, session_id, tag):
-    tkn_data = create_tailscale_auth_key(mission_id, session_id, tag)
-    if not tkn_data:
-        logger.error(f"Tailscale auth_token creation failed\n")
-        raise
-    else:
-        token, exp_hours = tkn_data
+    token, exp_hours = create_tailscale_auth_key(mission_id, session_id, tag)
     now = datetime.utcnow()
     expires = now + timedelta(hours=exp_hours)
 
@@ -77,11 +78,11 @@ def create_token(mission_id, session_id, tag):
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO grfp_sm_auth_tokens 
-                (token, mission_id, session_id, is_active_flg, tag, created_at, expires_at, updated_at)
+                (token_hash, mission_id, session_id, is_active_flg, tag, created_at, expires_at, updated_at)
                 VALUES (%s, %s, %s, TRUE, %s, %s, %s, %s)
-            """, (token, mission_id, session_id, tag, now, expires, now,))
+            """, (hash_token(token), mission_id, session_id, tag, now, expires, now,))
             conn.commit()
-    logger.info(f"Tokens created successfully {token}, {now}, {expires}\n")
+    logger.info(f"Tokens created successfully {token[-10:]}, {now}, {expires}\n")
     return token
 
 def deactivate_expired_tokens():
@@ -102,5 +103,4 @@ def deactivate_expired_tokens():
 
 
 if __name__ == "__main__":
-    print(create_token())
-    print(create_token())
+    print(create_token('test_mission_id1', 'test_session_id1', 'client'))

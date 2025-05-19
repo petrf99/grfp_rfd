@@ -13,8 +13,8 @@ def get_access_token():
 
     resp = requests.post("https://api.tailscale.com/api/v2/oauth/token", data={
         "grant_type": "client_credentials",
-        "client_id": os.getenv("TAILSCALE_CLIENT_ID"),
-        "client_secret": os.getenv("TAILSCALE_CLIENT_SECRET"),
+        "client_id": os.getenv("OAUTH_CLIENT_ID"),
+        "client_secret": os.getenv("OAUTH_CLIENT_SECRET"),
     })
     resp.raise_for_status()
     data = resp.json()

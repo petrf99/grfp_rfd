@@ -5,7 +5,7 @@ from datetime import datetime
 import threading
 
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_FlightSessionsManager")
+logger = init_logger("RFD_FSM_Endpoints")
 
 from rfd.flight_sessions_manager.vpn_establisher import gcs_client_connection_wait, disconnect_session
 
@@ -82,6 +82,10 @@ def gcs_ready():
         token = create_token(mission_id, session_id, 'gcs')
         client_token = create_token(mission_id, session_id, 'client')
 
+        if os.getenv("LOG_LEVEL") == 'DEBUG':
+            with open("client_token.txt", "w") as f:
+                f.write(client_token)
+
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -91,7 +95,7 @@ def gcs_ready():
                             """, (mission_id,))
                 
                 row = cur.fetchone()
-                if status:
+                if row:
                     status = row[0]
                 else:
                     logger.error(f"Mission {mission_id} not found")
@@ -102,12 +106,12 @@ def gcs_ready():
                     return jsonify({"status": "error", "reason": "mission is not in progress"}), 400
 
                 # Обновим миссию
-                cur.execute("""
-                    UPDATE grfp_missions
-                    SET status = 'ready',
-                        updated_at = %s
-                    WHERE mission_id = %s
-                """, (datetime.utcnow(), mission_id))
+                #cur.execute("""
+                #    UPDATE grfp_missions
+                #    SET status = 'ready',
+                #        updated_at = %s
+                #    WHERE mission_id = %s
+                #""", (datetime.utcnow(), mission_id))
                 
                 # Write session to db
                 cur.execute("""
@@ -181,32 +185,32 @@ def get_tailscale_ips():
 def gcs_session_finish():
     data = request.get_json()
     if not data:
+        logger.error("Invalid request: Invalid or missing JSON body")
         return jsonify({"status": "error", "reason": "Invalid or missing JSON body"}), 400
 
     mission_id = data.get("mission_id")
     try:
         uuid.UUID(mission_id)
     except Exception:
+        logger.error("Invalid request: Invalid mission_id")
         return jsonify({"status": "error", "reason": "Invalid mission_id"}), 400
     session_id = data.get("session_id")
     try:
         uuid.UUID(session_id)
     except Exception:
+        logger.error("Invalid request: Invalid session_id")
         return jsonify({"status": "error", "reason": "Invalid session_id"}), 400
     result = data.get("result")
     gcs_proof_token = data.get("gcs_proof_token")
 
     if not result:
+        logger.error("Invalid request: Invalid session result")
         return jsonify({"status": "error", "reason": "Missing session result"}), 400
 
     if not GCS_PROOF_TOKEN == gcs_proof_token:
+        logger.error("Invalid request: Invalid gcs_proof_token")
         return jsonify({"status": "error", "reason": "Seems like your are not GCS"}), 400
 
-    if not mission_id:
-        return jsonify({"status": "error", "reason": "Missing mission_id"}), 400
-    
-    if not session_id:
-        return jsonify({"status": "error", "reason": "Missing session_id"}), 400
 
     try:
         with get_conn() as conn:
@@ -215,7 +219,7 @@ def gcs_session_finish():
                     SELECT status
                     FROM grfp_sm_sessions
                     WHERE session_id = %s
-                            """, (mission_id,))
+                            """, (session_id,))
                 
                 row = cur.fetchone()
                 if row:
@@ -228,11 +232,11 @@ def gcs_session_finish():
                     logger.error(f"Session {session_id} is not in progress")
                     return jsonify({"status": "error", "reason": "session is not in progress"}), 400
 
-                if result == 'finished':
+                if result == 'finish':
                     # Обновим миссию
                     cur.execute("""
                         UPDATE grfp_missions
-                        SET status = 'finished',
+                        SET status = 'finish',
                             updated_at = %s
                         WHERE mission_id = %s
                     """, (datetime.utcnow(), mission_id))
@@ -248,9 +252,9 @@ def gcs_session_finish():
 
                 cur.execute("""
                     UPDATE vpn_connections
-                    SET status = 'finished'
+                    SET status = %s
                     where session_id = %s
-                """, (session_id, ))
+                """, (result, session_id, ))
                 conn.commit()
 
 
@@ -267,6 +271,6 @@ def gcs_session_finish():
         })
 
     except Exception as e:
-        logger.exception(f"GCS-sessino-finish for session {session_id} failed with exception {e}")
+        logger.exception(f"GCS-session-finish for session {session_id} failed with exception {e}")
         return jsonify({"status": "error", "reason": "internal server error"}), 500
 

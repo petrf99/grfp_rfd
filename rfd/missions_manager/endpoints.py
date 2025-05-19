@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_MissionsManager")
+logger = init_logger("RFD_MM_Endpoints")
 
 def mission_request():
     mission_id = str(uuid.uuid4())

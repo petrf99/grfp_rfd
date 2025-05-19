@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_FlightSessionsManager")
+logger = init_logger("RFD_FSM_TokenManager")
 
 load_dotenv()
 
@@ -29,7 +29,7 @@ if not TAILSCALE_API_KEY or not TAILNET:
 TS_AUTH_KEY_EXP_HOURS = int(os.getenv("TS_AUTH_KEY_EXP_HOURS", 3))
 
 # Создание нового auth key
-def create_tailscale_auth_key(mission_id, session_id, tag: str = None, ephemeral=True, preauthorized=True, reusable=False, expiry_hours=TS_AUTH_KEY_EXP_HOURS):
+def create_tailscale_auth_key(session_id, tag: str = None, ephemeral=True, preauthorized=True, reusable=False, expiry_hours=TS_AUTH_KEY_EXP_HOURS):
     url = f"https://api.tailscale.com/api/v2/tailnet/{TAILNET}/keys"
 
     headers = {
@@ -50,7 +50,7 @@ def create_tailscale_auth_key(mission_id, session_id, tag: str = None, ephemeral
             }
         },
         "expirySeconds": expiry_hours * 3600,
-        "description": f"authkey_session_{session_id}_mission_{mission_id}"
+        "description": f"{tag}-{session_id[:8]}"
     }
 
     response = requests.post(url, headers=headers, auth=auth, data=json.dumps(payload))
@@ -70,7 +70,7 @@ def hash_token(token: str) -> str:
 
 
 def create_token(mission_id, session_id, tag):
-    token, exp_hours = create_tailscale_auth_key(mission_id, session_id, tag)
+    token, exp_hours = create_tailscale_auth_key(session_id=session_id, tag=tag)
     now = datetime.utcnow()
     expires = now + timedelta(hours=exp_hours)
 

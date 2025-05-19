@@ -9,17 +9,22 @@ import os
 from tech_utils.db import get_conn
 
 # === НАСТРОЙКИ ===
-from urllib.parse import quote
  
 TAILSCALE_API_KEY = os.getenv("TAILSCALE_API_KEY")
-TAILNET = quote(os.getenv("TAILNET"))
+TAILNET = os.getenv("TAILNET")
 POLL_INTERVAL = int(os.getenv("TAILSCALE_IP_POLL_INTERVAL"))
-TIMEOUT = os.getenv(os.getenv("TAILSCALE_IP_POLL_TIMEOUT"))
+TIMEOUT = int(os.getenv("TAILSCALE_IP_POLL_TIMEOUT", 600))
+
+from rfd.flight_sessions_manager.tailscale_oauth import get_access_token
 
 def get_devices():
     url = f"https://api.tailscale.com/api/v2/tailnet/{TAILNET}/devices"
-    auth = (TAILSCALE_API_KEY, "")
-    response = requests.get(url, auth=auth)
+
+    headers = {
+    "Authorization": f"Bearer {get_access_token()}"
+    }
+
+    response = requests.get(url, headers=headers)
     response.raise_for_status()
     return response.json()
 
@@ -63,7 +68,7 @@ def gcs_client_connection_wait(mission_id, session_id, timeout=TIMEOUT, interval
                         tailscale_name_client,
                         gcs_ip,
                         client_ip,
-                        status
+                        status )
                         VALUES (%s, %s, TRUE, TRUE, %s, %s, %s, %s, %s)
                     """, (mission_id, session_id, hostname_gcs, hostname_client, gcs_ip, client_ip, 'ready'))
                     conn.commit()
@@ -95,11 +100,15 @@ def gcs_client_connection_wait(mission_id, session_id, timeout=TIMEOUT, interval
 
 
 def delete_device(device_id):
-    url = f"https://api.tailscale.com/api/v2/device/{device_id}"
-    auth = (TAILSCALE_API_KEY, "")
-    response = requests.delete(url, auth=auth)
+    url = f"https://api.tailscale.com/api/v2/tailnet/{TAILNET}/device/{device_id}"
+
+    headers = {
+    "Authorization": f"Bearer {get_access_token()}"
+    }
+
+    response = requests.delete(url, headers=headers)
     if response.status_code == 200:
-        logger.info(f"Device {device_id} successsfully deleted.")
+        logger.info(f"Device {device_id} successfully deleted.")
     else:
         logger.error(f"Tailscale error while deleting device {device_id}: {response.status_code} {response.text}")
 
@@ -119,7 +128,6 @@ def delete_auth_key(key_id):
 def disconnect_session(session_id):
     devices = get_devices()
     authkeys = get_auth_keys()
-    seen_keys = set()
     deleted = 0
 
     for d in devices:
@@ -133,7 +141,8 @@ def disconnect_session(session_id):
     for key in authkeys:
         desc = key.get("description", "")
         key_id = key.get("id")
-        if session_id == desc.split('_')[2]:
+        parts = desc.split('_')
+        if len(parts) >= 4 and session_id == parts[2]:
             logger.info(f"Authkey '{desc}' found — deleting...")
             delete_auth_key(key_id)
             deleted += 1

@@ -64,7 +64,12 @@ def create_tailscale_auth_key(mission_id, session_id, tag: str = None, ephemeral
 
 
 def create_token(mission_id, session_id, tag):
-    token, exp_hours = create_tailscale_auth_key(mission_id, session_id, tag)
+    tkn_data = create_tailscale_auth_key(mission_id, session_id, tag)
+    if not tkn_data:
+        logger.error(f"Tailscale auth_token creation failed\n")
+        raise
+    else:
+        token, exp_hours = tkn_data
     now = datetime.utcnow()
     expires = now + timedelta(hours=exp_hours)
 

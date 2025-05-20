@@ -1,13 +1,13 @@
 # rfd_server.py
-from flask import Flask, request, jsonify
+from flask import request, jsonify
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 import threading
 
 from tech_utils.logger import init_logger
 logger = init_logger("RFD_FSM_Endpoints")
 
-from rfd.flight_sessions_manager.vpn_establisher import gcs_client_connection_wait, disconnect_session
+from rfd.flight_sessions_manager.vpn_establisher import gcs_client_connection_wait, clear_tailnet
 
 from tech_utils.db import get_conn
 
@@ -40,7 +40,7 @@ def validate_token():
 
                 token_id, is_active, expires_at, session_id = row
 
-                if not is_active or expires_at < datetime.utcnow():
+                if not is_active or expires_at < datetime.now(timezone.utc):
                     logger.info(f"Token {token} is inactive or expired")
                     return jsonify({"status": "error", "reason": "Token expired or inactive"}), 403
 
@@ -54,7 +54,7 @@ def validate_token():
 
 
 
-from rfd.flight_sessions_manager.token_manager import create_token
+from rfd.flight_sessions_manager.token_manager import create_token, deactivate_token_db
 import os
 
 GCS_PROOF_TOKEN = os.getenv("GCS_PROOF_TOKEN")
@@ -181,7 +181,7 @@ def get_tailscale_ips():
         return jsonify({"status": "error", "reason": "Internal server error"}), 500
     
 
-
+from rfd.flight_sessions_manager.session_manager import close_session
 def gcs_session_finish():
     data = request.get_json()
     if not data:
@@ -212,65 +212,15 @@ def gcs_session_finish():
         return jsonify({"status": "error", "reason": "Seems like your are not GCS"}), 400
 
 
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT status
-                    FROM grfp_sm_sessions
-                    WHERE session_id = %s
-                            """, (session_id,))
-                
-                row = cur.fetchone()
-                if row:
-                    status = row[0]
-                else:
-                    logger.error(f"Session {session_id} not found")
-                    return jsonify({"status": "error", "reason": "session not found"}), 400
-
-                if status != 'in progress':
-                    logger.error(f"Session {session_id} is not in progress")
-                    return jsonify({"status": "error", "reason": "session is not in progress"}), 400
-
-                if result == 'finish':
-                    # Обновим миссию
-                    cur.execute("""
-                        UPDATE grfp_missions
-                        SET status = 'finish',
-                            updated_at = %s
-                        WHERE mission_id = %s
-                    """, (datetime.utcnow(), mission_id))
-
-                    logger.info(f"Mission {mission_id} finished")
-                
-                # Write session to db
-                cur.execute("""
-                    UPDATE grfp_sm_sessions 
-                    SET status = %s
-                    where session_id = %s
-                """, (result, session_id, ))
-
-                cur.execute("""
-                    UPDATE vpn_connections
-                    SET status = %s
-                    where session_id = %s
-                """, (result, session_id, ))
-                conn.commit()
-
-
-        # Finish VPN
-        threading.Thread(
-            target=disconnect_session,
-            args=(session_id,),
+        # Finish job
+    threading.Thread(
+            target=close_session,
+            args=(mission_id, session_id, result),
             daemon=True
         ).start()
 
-        logger.info(f"Session {session_id} is being finished.")
-        return jsonify({
+    logger.info(f"Session {session_id} is being finished.")
+    return jsonify({
             "status": "ok"
         })
-
-    except Exception as e:
-        logger.exception(f"GCS-session-finish for session {session_id} failed with exception {e}")
-        return jsonify({"status": "error", "reason": "internal server error"}), 500
 

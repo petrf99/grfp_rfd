@@ -14,6 +14,7 @@ TAILSCALE_API_KEY = os.getenv("TAILSCALE_API_KEY")
 TAILNET = os.getenv("TAILNET")
 POLL_INTERVAL = int(os.getenv("TAILSCALE_IP_POLL_INTERVAL"))
 TIMEOUT = int(os.getenv("TAILSCALE_IP_POLL_TIMEOUT", 600))
+TAILSCALE_IPS_POLL_CHECK_FREQ = int(os.getenv("TAILSCALE_IPS_POLL_CHECK_FREQ"))
 
 from rfd.flight_sessions_manager.tailscale_oauth import get_access_token
 
@@ -65,13 +66,31 @@ def get_auth_keys():
     return []  # fallback
 
 
+def is_sess_active(session_id):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT status
+                FROM grfp_sm_sessions
+                WHERE session_id = %s
+                        """, (session_id,))
+            
+            row = cur.fetchone()
+            if row == 'in progress':
+                return True
+            return False
+
+
 def gcs_client_connection_wait(mission_id, session_id, timeout=TIMEOUT, interval=POLL_INTERVAL):
     hostname_client = f"client-{session_id[:8]}"
     hostname_gcs = f"gcs-{session_id[:8]}"
 
     start_time = time.time()
 
-    while True:
+    is_active = is_sess_active(session_id)
+    n_attempts = 0
+
+    while is_active:
         devices = get_devices()
         found = {"client": None, "gcs": None}
 
@@ -120,12 +139,15 @@ def gcs_client_connection_wait(mission_id, session_id, timeout=TIMEOUT, interval
                     """, (session_id, ))
                     conn.commit()
 
-            disconnect_session(session_id)
+            clear_tailnet(session_id)
             logger.info(f"Session {session_id} disconnected due to timeout")
             raise TimeoutError(f"Timeout error. No connected devices for session_id={session_id} found")
         
         logger.info(f"Waiting to connect {hostname_client} and {hostname_gcs}...")
         time.sleep(interval)
+        n_attempts += 1
+        if n_attempts % TAILSCALE_IPS_POLL_CHECK_FREQ == 0:
+            is_active = is_sess_active(session_id)
 
 
 def delete_device(device_id):
@@ -163,7 +185,7 @@ def delete_auth_key(key_id):
         return False
 
 
-def disconnect_session(session_id):
+def clear_tailnet(session_id):
     devices = get_devices()
     authkeys = get_auth_keys()
     #print(f"######### {authkeys}")

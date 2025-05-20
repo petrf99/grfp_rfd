@@ -16,16 +16,16 @@ def db_init():
                     session_id uuid,
                     is_active_flg boolean DEFAULT TRUE,
                     tag varchar(64),
-                    created_at timestamp DEFAULT now(),
-                    expires_at timestamp,
-                    used_at timestamp,
-                    updated_at timestamp default now()
+                    created_at TIMESTAMPTZ DEFAULT now(),
+                    expires_at TIMESTAMPTZ,
+                    used_at TIMESTAMPTZ,
+                    updated_at TIMESTAMPTZ DEFAULT now()
                 );
                     CREATE TABLE IF NOT EXISTS grfp_sm_sessions (
                         session_id UUID PRIMARY KEY,
                         status varchar(64) default 'new',
-                        created_at timestamp DEFAULT now()  ,
-                        updated_at timestamp default now()
+                        created_at TIMESTAMPTZ DEFAULT now()  ,
+                        updated_at TIMESTAMPTZ default now()
                         );
 
                     CREATE TABLE IF NOT EXISTS vpn_connections (
@@ -38,8 +38,8 @@ def db_init():
                         gcs_ip varchar,
                         client_ip varchar,
                         status varchar DEFAULT 'waiting',  -- или ready, connected
-                        created_at timestamp DEFAULT now(),
-                        updated_at timestamp default now()
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        updated_at TIMESTAMPTZ default now()
                     );
                     """)
                 conn.commit()

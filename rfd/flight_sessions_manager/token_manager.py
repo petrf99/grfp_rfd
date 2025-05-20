@@ -3,7 +3,7 @@ import hashlib
 import uuid
 import requests
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
 from tech_utils.logger import init_logger
@@ -71,7 +71,7 @@ def hash_token(token: str) -> str:
 
 def create_token(mission_id, session_id, tag):
     token, exp_hours = create_tailscale_auth_key(session_id=session_id, tag=tag)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expires = now + timedelta(hours=exp_hours)
 
     with get_conn() as conn:
@@ -87,7 +87,7 @@ def create_token(mission_id, session_id, tag):
 
 def deactivate_expired_tokens():
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -102,5 +102,18 @@ def deactivate_expired_tokens():
         logger.error(f"[!] Error in deactivate_expired_tokens: {e}\n")
 
 
-if __name__ == "__main__":
-    print(create_token('test_mission_id1', 'test_session_id1', 'client'))
+def deactivate_token_db(session_id):
+    try:
+        now = datetime.now(timezone.utc)
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE grfp_sm_auth_tokens
+                    SET is_active_flg = FALSE
+                    , updated_at = %s
+                    WHERE session_id = %s
+                """, (now, session_id, ))
+                conn.commit()
+            logger.info(f"Deactivation of token for session {session_id} succeed\n")
+    except Exception as e:
+        logger.error(f"[!] Error in deactivate_token: {e}\n")

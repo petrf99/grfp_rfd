@@ -36,6 +36,7 @@ def validate_token():
                         FROM grfp_sm_auth_tokens
                         WHERE tag = 'client'
                         AND mission_id = (SELECT mission_id FROM base_token)
+                        and is_active_flg = TRUE
                         ORDER BY valid_from DESC
                         LIMIT 1
                     )

@@ -89,6 +89,37 @@ def clean_sm_db():
                         close_session(mission_id, session_id, 'abort')
                     logger.info(f"Clean_sm_db: cleaned {len(rows)} sessions\n")
                 else:
+                    logger.info("Clean_sm_db: No sessions to clean")
+
+                cur.execute("""
+                    WITH sorted_tokens AS (
+                        SELECT *,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY mission_id
+                                   ORDER BY valid_from DESC
+                               ) AS row_num
+                        FROM grfp_sm_auth_tokens
+                        WHERE valid_to IS NULL
+                        and is_active_flg = TRUE
+                    )
+                    SELECT session_id
+                    FROM sorted_tokens
+                    WHERE row_num > 1
+                """)
+
+                rows = cur.fetchall()
+
+                if rows:
+                    for row in rows:
+                        session_id = row[0]
+                        deactivate_token_db(session_id)
+                    logger.info(f"Clean_sm_db: cleaned {len(rows)} sessions\n")
+                else:
                     logger.info("Clean_sm_db: Nothing to clean")
+
     except Exception as e:
         logger.error(f"[!] Error in clean_sm_db job: {e}\n")
+
+
+if __name__ == '__main__':
+    clean_sm_db()

@@ -193,7 +193,8 @@ def clear_tailnet(session_id):
     devices = get_devices()
     authkeys = get_auth_keys()
     #print(f"######### {authkeys}")
-    deleted = 0
+    deleted_dev = 0
+    deleted_keys = 0
 
     hostname_client = f"client-{session_id[:8]}"
     hostname_gcs = f"gcs-{session_id[:8]}"
@@ -204,17 +205,20 @@ def clear_tailnet(session_id):
             device_id = d["id"]
             logger.info(f"Device {hostname} found (ID: {device_id}) — deleting...")
             delete_device(device_id)
-            deleted += 1
+            deleted_dev += 1
 
     for key in authkeys:
         desc = key.get("description", "")
         key_id = key.get("id")
-        if desc.split('-')[1] == session_id[:8]:
-            logger.info(f"Authkey '{desc}' found — deleting...")
-            delete_auth_key(key_id)
-            deleted += 1
+        try:
+            if desc.split('-')[1] == session_id[:8] and desc.split('-')[0] in ['gcs', 'client']:
+                if delete_auth_key(key_id):
+                    deleted_keys += 1
+        except Exception as e:
+            logger.warning(f"Clear session: Exception while deleting key: {e}")
+            pass
 
-    if deleted == 0:
-        logger.info(f"No devices found in session_id={session_id} to delete.")
+    if deleted_dev + deleted_keys == 0:
+        logger.info(f"Clear session: Nothing found to delete.")
     else:
-        logger.info(f"Session {session_id} disconected. All devices and authkeys removed from Tailnet")
+        logger.info(f"Session {session_id} tailnet cleared. {deleted_dev} devices and {deleted_keys} authkeys removed from Tailnet")

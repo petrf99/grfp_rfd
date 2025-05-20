@@ -7,14 +7,26 @@ def reset_tailnet():
     deleted_keys = 0
 
     for d in devices:
-        device_id = d["id"]
-        if delete_device(device_id):
-            deleted_dev += 1
+        device_id = d.get("id", "")
+        hostname = d.get("hostname", "")
+        try:
+            if hostname.split('-')[0] in ['gcs', 'client']:
+                if delete_device(device_id):
+                    deleted_dev += 1
+        except Exception as e:
+            print(e)
+            pass
 
     for key in authkeys:
         key_id = key.get("id")
-        if delete_auth_key(key_id):
-            deleted_keys += 1
+        desc = key.get("description", "")
+        try:
+            if desc.split('-')[0] in ['gcs', 'client']:
+                if delete_auth_key(key_id):
+                    deleted_keys += 1
+        except Exception as e:
+            print(e)
+            pass
 
     if deleted_dev + deleted_keys == 0:
         print(f"Nothing found to delete.")

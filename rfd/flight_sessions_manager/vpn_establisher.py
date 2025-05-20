@@ -105,14 +105,16 @@ def gcs_client_connection_wait(mission_id, session_id, timeout=TIMEOUT, interval
             found = {"client": None, "gcs": None}
 
             for d in devices:
-                if d.get("hostname") == hostname_client:
+                name = d.get("name", "").split(".")[0]
+                if name == hostname_client:
                     found["client"] = d
-                elif d.get("hostname") == hostname_gcs:
+                elif name == hostname_gcs:
                     found["gcs"] = d
 
             if found["client"] and found["gcs"]:
                 client_ip = found["client"]["addresses"][0]
                 gcs_ip = found["gcs"]["addresses"][0]
+
                 logger.info(f"Both devices connected for session {session_id}. Client: {client_ip}. GCS: {gcs_ip}")
                 with conn.cursor() as cur:
                     cur.execute("""
@@ -222,3 +224,7 @@ def clear_tailnet(session_id):
         logger.info(f"Clear session: Nothing found to delete.")
     else:
         logger.info(f"Session {session_id} tailnet cleared. {deleted_dev} devices and {deleted_keys} authkeys removed from Tailnet")
+
+
+if __name__ == '__main__':
+    gcs_client_connection_wait('abc', '325db547-e4ec-465b-a692-f3ebce2521a7')

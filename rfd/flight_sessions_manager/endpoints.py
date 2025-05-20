@@ -27,22 +27,29 @@ def validate_token():
                 # Token has to be the last among all tokens for his mission_id
                 cur.execute("""
                     WITH base_token AS (
-                        SELECT mission_id
+                        SELECT distinct mission_id
                         FROM grfp_sm_auth_tokens
                         WHERE token_hash = %s
+                        and valid_to IS NULL
                     ),
                     latest_token AS (
-                        SELECT *
+                        SELECT *, ROW_NUMBER() OVER (
+                                   PARTITION BY mission_id
+                                   ORDER BY valid_from DESC
+                               ) AS row_num
                         FROM grfp_sm_auth_tokens
                         WHERE tag = 'client'
+                        AND token_hash = %s
                         AND mission_id = (SELECT mission_id FROM base_token)
-                        and is_active_flg = TRUE
+                        and valid_to IS NULL
                         ORDER BY valid_from DESC
                         LIMIT 1
                     )
-                    SELECT id, is_active_flg, expires_at, session_id
+                    SELECT id,
+                            CASE WHEN row_num = 1 THEN is_active_flg ELSE FALSE END as is_active_flg, 
+                            expires_at, session_id
                     FROM latest_token
-                    WHERE token_hash = %s;
+                    ;
 
                 """, (token, token))
                 row = cur.fetchone()

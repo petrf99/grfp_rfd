@@ -1,9 +1,8 @@
 from flask import Flask, request, jsonify
 
-from tech_utils.db import get_conn, RealDictCursor
+from tech_utils.db import get_conn, update_versioned, RealDictCursor
 from tech_utils.email_utils import send_email, ground_teams_email
 import uuid
-from datetime import datetime, timezone
 
 from tech_utils.logger import init_logger
 logger = init_logger("RFD_MM_Endpoints")
@@ -51,18 +50,11 @@ def change_mission_status():
         return jsonify({"status": "error", "reason": "Missing parameters"}), 400
     
     logger.info(f"Mission status change request correct {data['mission_id']}. New status: {data['new_status']}")
+    
+    conn = get_conn()
     try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                now = datetime.now(timezone.utc)
-                cur.execute("""
-                        UPDATE grfp_missions
-                        SET status = %s
-                        , updated_at = %s
-                        WHERE mission_id = %s
-                        """, (data['new_status'], now, data['mission_id']))
-                conn.commit()
-                logger.info(f"Successfully changed status for {data['mission_id']}. New status: {data['new_status']}")
+        update_versioned(conn, 'grfp_missions', 'mission_id', data['mission_id'], {'status': data['new_status']})
+        logger.info(f"Successfully changed status for {data['mission_id']}. New status: {data['new_status']}")
         
         # Email alert to ground teams
         subject = f"[GRFP] Mission Status Changed"
@@ -74,6 +66,8 @@ def change_mission_status():
     except Exception as e:
         logger.error(f"Error changing mission status {data['mission_id']}: {e}", exc_info=True)
         return jsonify({"status": "error", "reason": "DB insert error"}), 500
+    finally:
+        conn.close()
 
 
 def get_missions_list():
@@ -87,6 +81,7 @@ def get_missions_list():
                     cur.execute("""
                         SELECT *
                         FROM grfp_missions
+                        WHERE valid_to IS NULL
                         ORDER BY created_at DESC
                     """)
                     rows = cur.fetchall()
@@ -96,6 +91,7 @@ def get_missions_list():
                         SELECT *
                         FROM grfp_missions
                         WHERE user_id = %s
+                        and valid_to IS NULL
                         ORDER BY created_at DESC
                     """, (data['user_id'],))
                     rows = cur.fetchall()

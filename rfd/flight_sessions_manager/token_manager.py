@@ -11,7 +11,7 @@ logger = init_logger("RFD_FSM_TokenManager")
 
 load_dotenv()
 
-from tech_utils.db import get_conn
+from tech_utils.db import get_conn, update_versioned
 
 def generate_token():
     raw = uuid.uuid4().hex
@@ -78,42 +78,20 @@ def create_token(mission_id, session_id, tag):
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO grfp_sm_auth_tokens 
-                (token_hash, mission_id, session_id, is_active_flg, tag, created_at, expires_at, updated_at)
-                VALUES (%s, %s, %s, TRUE, %s, %s, %s, %s)
-            """, (hash_token(token), mission_id, session_id, tag, now, expires, now,))
+                (token_hash, mission_id, session_id, is_active_flg, tag, created_at, expires_at)
+                VALUES (%s, %s, %s, TRUE, %s, %s, %s)
+            """, (hash_token(token), mission_id, session_id, tag, now, expires,))
             conn.commit()
     logger.info(f"Tokens created successfully {token[-10:]}, {now}, {expires}\n")
     return token
 
-def deactivate_expired_tokens():
-    try:
-        now = datetime.now(timezone.utc)
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    UPDATE grfp_sm_auth_tokens
-                    SET is_active_flg = FALSE
-                    , updated_at = %s
-                    WHERE expires_at <= %s AND is_active_flg = TRUE
-                """, (now, now,))
-                conn.commit()
-            logger.info("Deactivation of expired tokens succeed\n")
-    except Exception as e:
-        logger.error(f"[!] Error in deactivate_expired_tokens: {e}\n")
-
 
 def deactivate_token_db(session_id):
+    conn = get_conn()
     try:
-        now = datetime.now(timezone.utc)
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    UPDATE grfp_sm_auth_tokens
-                    SET is_active_flg = FALSE
-                    , updated_at = %s
-                    WHERE session_id = %s
-                """, (now, session_id, ))
-                conn.commit()
-            logger.info(f"Deactivation of token for session {session_id} succeed\n")
+        update_versioned(conn, 'grfp_sm_auth_tokens', 'session_id', session_id, {'is_active_flg':False})
+        logger.info(f"Deactivation of token for session {session_id} succeed\n")
     except Exception as e:
         logger.error(f"[!] Error in deactivate_token: {e}\n")
+    finally:
+        conn.close()

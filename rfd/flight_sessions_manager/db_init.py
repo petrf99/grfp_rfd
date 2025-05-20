@@ -10,37 +10,57 @@ def db_init():
             with conn.cursor() as cur:
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS grfp_sm_auth_tokens (
-                    id serial PRIMARY KEY,
-                    mission_id UUID,
-                    token_hash varchar(255) UNIQUE NOT NULL,
-                    session_id uuid,
-                    is_active_flg boolean DEFAULT TRUE,
-                    tag varchar(64),
-                    created_at TIMESTAMPTZ DEFAULT now(),
-                    expires_at TIMESTAMPTZ,
-                    used_at TIMESTAMPTZ,
-                    updated_at TIMESTAMPTZ DEFAULT now()
-                );
+                        id SERIAL PRIMARY KEY,
+                        mission_id UUID,
+                        token_hash VARCHAR(255) NOT NULL,
+                        session_id UUID,
+                        is_active_flg BOOLEAN DEFAULT TRUE,
+                        tag VARCHAR(64),
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        expires_at TIMESTAMPTZ,
+                        used_at TIMESTAMPTZ,
+                        valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        valid_to TIMESTAMPTZ DEFAULT NULL,
+                        UNIQUE (token_hash, valid_from)
+                    );
+
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_active_auth_token ON grfp_sm_auth_tokens(token_hash)
+                    WHERE valid_to IS NULL;
+
                     CREATE TABLE IF NOT EXISTS grfp_sm_sessions (
-                        session_id UUID PRIMARY KEY,
-                        status varchar(64) default 'new',
-                        created_at TIMESTAMPTZ DEFAULT now()  ,
-                        updated_at TIMESTAMPTZ default now()
-                        );
+                        id SERIAL PRIMARY KEY,
+                        session_id UUID NOT NULL,
+                        mission_id UUID NOT NULL,
+                        status VARCHAR(64) DEFAULT 'new',
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        valid_to TIMESTAMPTZ DEFAULT NULL,
+                        UNIQUE (session_id, valid_from)
+                    );
+
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_active_session_id ON grfp_sm_sessions(session_id)
+                    WHERE valid_to IS NULL;
 
                     CREATE TABLE IF NOT EXISTS vpn_connections (
-                        mission_id uuid PRIMARY KEY,
-                        session_id uuid,
-                        gcs_ready_flg boolean DEFAULT FALSE,
-                        client_ready_flg boolean DEFAULT FALSE,
-                        tailscale_name_gcs varchar,
-                        tailscale_name_client varchar,
-                        gcs_ip varchar,
-                        client_ip varchar,
-                        status varchar DEFAULT 'waiting',  -- или ready, connected
+                        id SERIAL PRIMARY KEY,
+                        mission_id UUID NOT NULL,
+                        session_id UUID NOT NULL,
+                        gcs_ready_flg BOOLEAN DEFAULT FALSE,
+                        client_ready_flg BOOLEAN DEFAULT FALSE,
+                        tailscale_name_gcs VARCHAR,
+                        tailscale_name_client VARCHAR,
+                        gcs_ip VARCHAR,
+                        client_ip VARCHAR,
+                        status VARCHAR DEFAULT 'in progress',  -- варианты: abort, in progress, finish
                         created_at TIMESTAMPTZ DEFAULT now(),
-                        updated_at TIMESTAMPTZ default now()
+                        valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        valid_to TIMESTAMPTZ DEFAULT NULL,
+                        UNIQUE (session_id, valid_from)
                     );
+
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_active_vpn_mission ON vpn_connections(session_id)
+                    WHERE valid_to IS NULL;
+
                     """)
                 conn.commit()
                 logger.info("RFDSM tables created")

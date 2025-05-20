@@ -6,7 +6,7 @@ import requests
 import time
 import os
 
-from tech_utils.db import get_conn
+from tech_utils.db import get_conn, update_versioned
 
 # === НАСТРОЙКИ ===
  
@@ -73,11 +73,13 @@ def is_sess_active(session_id):
                 SELECT status
                 FROM grfp_sm_sessions
                 WHERE session_id = %s
+                AND valid_to IS NULL
                         """, (session_id,))
             
             row = cur.fetchone()
             if row == 'in progress':
                 return True
+            logger.info(f"Session {session_id} which was waiting for connection has been deactivated")
             return False
 
 
@@ -90,64 +92,61 @@ def gcs_client_connection_wait(mission_id, session_id, timeout=TIMEOUT, interval
     is_active = is_sess_active(session_id)
     n_attempts = 0
 
-    while is_active:
-        devices = get_devices()
-        found = {"client": None, "gcs": None}
+    conn = get_conn()
+    try:
+        while is_active:
+            devices = get_devices()
+            found = {"client": None, "gcs": None}
 
-        for d in devices:
-            if d.get("hostname") == hostname_client:
-                found["client"] = d
-            elif d.get("hostname") == hostname_gcs:
-                found["gcs"] = d
+            for d in devices:
+                if d.get("hostname") == hostname_client:
+                    found["client"] = d
+                elif d.get("hostname") == hostname_gcs:
+                    found["gcs"] = d
 
-        if found["client"] and found["gcs"]:
-            client_ip = found["client"]["addresses"][0]
-            gcs_ip = found["gcs"]["addresses"][0]
-            logger.info(f"Both devices connected for session {session_id}. Client: {client_ip}. GCS: {gcs_ip}")
-            with get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO vpn_connections (
-                        mission_id,
-                        session_id ,
-                        gcs_ready_flg,
-                        client_ready_flg,
-                        tailscale_name_gcs,
-                        tailscale_name_client,
-                        gcs_ip,
-                        client_ip,
-                        status )
-                        VALUES (%s, %s, TRUE, TRUE, %s, %s, %s, %s, %s)
-                    """, (mission_id, session_id, hostname_gcs, hostname_client, gcs_ip, client_ip, 'ready'))
-                    conn.commit()
+            if found["client"] and found["gcs"]:
+                client_ip = found["client"]["addresses"][0]
+                gcs_ip = found["gcs"]["addresses"][0]
+                logger.info(f"Both devices connected for session {session_id}. Client: {client_ip}. GCS: {gcs_ip}")
+                with conn as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO vpn_connections (
+                            mission_id,
+                            session_id ,
+                            gcs_ready_flg,
+                            client_ready_flg,
+                            tailscale_name_gcs,
+                            tailscale_name_client,
+                            gcs_ip,
+                            client_ip,
+                            status )
+                            VALUES (%s, %s, TRUE, TRUE, %s, %s, %s, %s, %s)
+                        """, (mission_id, session_id, hostname_gcs, hostname_client, gcs_ip, client_ip, 'in progress'))
+                        conn.commit()
+                        return
 
-        if time.time() - start_time > timeout:
-            logger.error(f"Timeout error. No connected devices for session_id={session_id} found")
-            # Write session to db
-            with get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        UPDATE grfp_sm_sessions 
-                        SET status = 'aborted'
-                        where session_id = %s
-                    """, (session_id, ))
+            if time.time() - start_time > timeout:
+                logger.error(f"Timeout error. No connected devices for session_id={session_id} found")
+                
+                update_versioned(conn, 'grfp_sm_sessions', 'session_id', session_id, {'status':'abort'})
+                update_versioned(conn, 'vpn_connections', 'session_id', session_id, {'status':'abort'})
 
-                    cur.execute("""
-                        UPDATE vpn_connections
-                        SET status = 'timeout'
-                        where session_id = %s
-                    """, (session_id, ))
-                    conn.commit()
+                clear_tailnet(session_id)
+                logger.info(f"Session {session_id} disconnected due to timeout")
+                raise TimeoutError(f"Timeout error. No connected devices for session_id={session_id} found")
+            
+            logger.info(f"Waiting to connect {hostname_client} and {hostname_gcs}...")
+            time.sleep(interval)
+            n_attempts += 1
+            if n_attempts % TAILSCALE_IPS_POLL_CHECK_FREQ == 0:
+                is_active = is_sess_active(session_id)
+    except Exception as e:
+        logger.exception(f"Client-connection-wait job failed for session {session_id} failed with exception {e}")
+        return
+    finally:
+        conn.close()
 
-            clear_tailnet(session_id)
-            logger.info(f"Session {session_id} disconnected due to timeout")
-            raise TimeoutError(f"Timeout error. No connected devices for session_id={session_id} found")
-        
-        logger.info(f"Waiting to connect {hostname_client} and {hostname_gcs}...")
-        time.sleep(interval)
-        n_attempts += 1
-        if n_attempts % TAILSCALE_IPS_POLL_CHECK_FREQ == 0:
-            is_active = is_sess_active(session_id)
 
 
 def delete_device(device_id):

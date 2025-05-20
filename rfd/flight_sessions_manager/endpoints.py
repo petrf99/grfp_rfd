@@ -24,14 +24,26 @@ def validate_token():
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                # Проверим токен
+                # Token has to be the last among all tokens for his mission_id
                 cur.execute("""
+                    WITH base_token AS (
+                        SELECT mission_id
+                        FROM grfp_sm_auth_tokens
+                        WHERE token_hash = %s
+                    ),
+                    latest_token AS (
+                        SELECT *
+                        FROM grfp_sm_auth_tokens
+                        WHERE tag = 'client'
+                        AND mission_id = (SELECT mission_id FROM base_token)
+                        ORDER BY valid_from DESC
+                        LIMIT 1
+                    )
                     SELECT id, is_active_flg, expires_at, session_id
-                    FROM grfp_sm_auth_tokens
-                    WHERE token_hash = %s
-                    AND tag = 'client'
-                    LIMIT 1
-                """, (token,))
+                    FROM latest_token
+                    WHERE token_hash = %s;
+
+                """, (token, token))
                 row = cur.fetchone()
 
                 if not row:
@@ -92,6 +104,7 @@ def gcs_ready():
                     SELECT status
                     FROM grfp_missions
                     WHERE mission_id = %s
+                    and valid_to IS NULL
                             """, (mission_id,))
                 
                 row = cur.fetchone()
@@ -116,9 +129,9 @@ def gcs_ready():
                 # Write session to db
                 cur.execute("""
                     INSERT INTO grfp_sm_sessions 
-                            (session_id, status)
-                    VALUES (%s, 'in progress')
-                """, (session_id, ))
+                            (session_id, mission_id, status)
+                    VALUES (%s, %s, 'in progress')
+                """, (session_id, mission_id))
                 conn.commit()
 
         # Setup VPN
@@ -162,7 +175,8 @@ def get_tailscale_ips():
                     SELECT gcs_ip, client_ip
                     FROM vpn_connections
                     WHERE session_id = %s
-                    AND status = 'ready'
+                    AND status = 'in progress'
+                    and valid_to IS NULL
                     LIMIT 1
                 """, (session_id,))
                 row = cur.fetchone()

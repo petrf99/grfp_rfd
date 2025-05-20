@@ -11,33 +11,47 @@ def db_init():
             with conn.cursor() as cur:
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS grfp_missions (
-                    mission_id UUID PRIMARY KEY,
+                    id SERIAL PRIMARY KEY,
+                    mission_id UUID NOT NULL,
                     user_id varchar(255),
                     location varchar(255),
                     time_window varchar(255),
                     drone_type varchar(128),
                     status varchar(32) DEFAULT 'new',
-                    created_at timestamp DEFAULT now(),
-                    updated_at timestamp DEFAULT now()
+                    parameters JSONB,
+                    created_at TIMESTAMPTZ DEFAULT now(),
+                    valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    valid_to TIMESTAMPTZ DEFAULT NULL,
+                    UNIQUE (mission_id, valid_from)
                     );
+                    CREATE UNIQUE INDEX ON grfp_missions(mission_id) WHERE valid_to IS NULL;
+
 
                     CREATE TABLE IF NOT EXISTS grfp_drone_types (
-                            drone_type_id serial PRIMARY KEY,
-                            drone_type_name varchar(128),
-                            status varchar(128) DEFAULT 'available',
+                            id SERIAL PRIMARY KEY,
+                            drone_type_id INT NOT NULL,
+                            drone_type_name VARCHAR(128),
+                            status VARCHAR(128) DEFAULT 'available',
                             specification JSONB,
-                            created_at timestamp DEFAULT now(),
-                            updated_at timestamp default now()
+                            created_at TIMESTAMPTZ DEFAULT now(),
+                            valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
+                            valid_to TIMESTAMPTZ DEFAULT NULL,
+                            UNIQUE (drone_type_id, valid_from)
                             );
+                            CREATE UNIQUE INDEX ON grfp_drone_types(drone_type_id) WHERE valid_to IS NULL;
                     
                     CREATE TABLE IF NOT EXISTS grfp_locations (
-                            location_id serial PRIMARY KEY,
+                            id SERIAL PRIMARY KEY,
+                            location_id INT NOT NULL,
                             location_name varchar(64),
                             location_description varchar(255),
                             status varchar(128) DEFAULT 'available',
-                            created_at timestamp DEFAULT now(),
-                            updated_at timestamp default now()
+                            created_at TIMESTAMPTZ DEFAULT now(),
+                            valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
+                            valid_to TIMESTAMPTZ DEFAULT NULL,
+                            UNIQUE (location_id, valid_from)
                             );
+                            CREATE UNIQUE INDEX ON grfp_locations(location_id) WHERE valid_to IS NULL;
                     """)
                 conn.commit()
                 logger.info("RFDMM tables created")

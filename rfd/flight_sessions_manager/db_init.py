@@ -31,7 +31,7 @@ def db_init():
                         id SERIAL PRIMARY KEY,
                         session_id UUID NOT NULL,
                         mission_id UUID NOT NULL,
-                        status VARCHAR(64) DEFAULT 'new',
+                        status VARCHAR(64) DEFAULT 'in progress',
                         created_at TIMESTAMPTZ DEFAULT now(),
                         valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
                         valid_to TIMESTAMPTZ DEFAULT NULL,

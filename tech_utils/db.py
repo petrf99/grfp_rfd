@@ -4,6 +4,9 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+from tech_utils.logger import init_logger
+logger = init_logger("TechUtils_DB")
+
 DB_CONFIG = {
     "dbname": os.getenv("POSTGRES_DB"),
     "user": os.getenv("POSTGRES_USER"),
@@ -46,8 +49,7 @@ def update_versioned(
     except psycopg2.errors.UndefinedTable as e:
         raise RuntimeError(f"Table '{table}' not found: {e}")
     except psycopg2.errors.UndefinedColumn as e:
-        return
-        #raise RuntimeError(f"Column '{key_field}' not found in table '{table}': {e}")
+        raise RuntimeError(f"Column '{key_field}' not found in table '{table}': {e}")
 
 
     # 2. Получить последнюю строку как шаблон
@@ -65,7 +67,9 @@ def update_versioned(
         desc = [d.name for d in cur.description]
 
     if not last_row:
-        raise ValueError(f"No existing row found for {key_field} = {key_value}")
+        logger.warning(f"Update-versioned {table}: No existing row found for {key_field} = {key_value}")
+        return
+        #raise ValueError(f"No existing row found for {key_field} = {key_value}")
 
     # 3. Создать новую запись на основе старой
     new_row = dict(zip(desc, last_row))

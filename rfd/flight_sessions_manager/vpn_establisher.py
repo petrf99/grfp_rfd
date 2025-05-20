@@ -77,13 +77,19 @@ def is_sess_active(session_id):
                         """, (session_id,))
             
             row = cur.fetchone()
-            if row == 'in progress':
-                return True
-            logger.info(f"Session {session_id} which was waiting for connection has been deactivated")
+            if row:
+                status = row[0]
+                if status == 'in progress':
+                    return True
+                else:
+                    logger.info(f"Session {session_id} which was waiting for connection has been deactivated")
+            else:
+                logger.info(f"Session {session_id} which was waiting for connection not found")
             return False
 
 
 def gcs_client_connection_wait(mission_id, session_id, timeout=TIMEOUT, interval=POLL_INTERVAL):
+    logger.info("Start connecting GCS and Client")
     hostname_client = f"client-{session_id[:8]}"
     hostname_gcs = f"gcs-{session_id[:8]}"
 
@@ -108,9 +114,8 @@ def gcs_client_connection_wait(mission_id, session_id, timeout=TIMEOUT, interval
                 client_ip = found["client"]["addresses"][0]
                 gcs_ip = found["gcs"]["addresses"][0]
                 logger.info(f"Both devices connected for session {session_id}. Client: {client_ip}. GCS: {gcs_ip}")
-                with conn as conn:
-                    with conn.cursor() as cur:
-                        cur.execute("""
+                with conn.cursor() as cur:
+                    cur.execute("""
                             INSERT INTO vpn_connections (
                             mission_id,
                             session_id ,
@@ -123,8 +128,8 @@ def gcs_client_connection_wait(mission_id, session_id, timeout=TIMEOUT, interval
                             status )
                             VALUES (%s, %s, TRUE, TRUE, %s, %s, %s, %s, %s)
                         """, (mission_id, session_id, hostname_gcs, hostname_client, gcs_ip, client_ip, 'in progress'))
-                        conn.commit()
-                        return
+                    conn.commit()
+                    return
 
             if time.time() - start_time > timeout:
                 logger.error(f"Timeout error. No connected devices for session_id={session_id} found")

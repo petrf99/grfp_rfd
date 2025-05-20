@@ -10,6 +10,7 @@ from rfd.flight_sessions_manager.token_manager import deactivate_token_db
 
 
 def close_session(mission_id, session_id, result):
+    logger.info(f"Closing session {session_id}")
     conn = get_conn()
     try:
         with conn as conn:
@@ -46,7 +47,10 @@ def close_session(mission_id, session_id, result):
         deactivate_token_db(session_id)
 
         # Deactivate and delete devices and keys on teilnet
+        logger.info("DB updates finished. Clearing tailnet")
         clear_tailnet(session_id)
+
+        logger.info(f"Session {session_id} closed")
 
         return
     
@@ -70,6 +74,7 @@ def clean_sm_db():
                                ) AS row_num
                         FROM grfp_sm_sessions
                         WHERE valid_to IS NULL
+                        and status = 'in progress'
                     )
                     SELECT mission_id, session_id
                     FROM sorted_sessions

@@ -32,23 +32,23 @@ def validate_token():
                         WHERE token_hash = %s
                         and valid_to IS NULL
                     ),
-                    latest_token AS (
+                    latest_tokens AS (
                         SELECT *, ROW_NUMBER() OVER (
                                    PARTITION BY mission_id
                                    ORDER BY valid_from DESC
                                ) AS row_num
                         FROM grfp_sm_auth_tokens
                         WHERE tag = 'client'
-                        AND token_hash = %s
                         AND mission_id = (SELECT mission_id FROM base_token)
                         and valid_to IS NULL
-                        ORDER BY valid_from DESC
-                        LIMIT 1
                     )
                     SELECT id,
                             CASE WHEN row_num = 1 THEN is_active_flg ELSE FALSE END as is_active_flg, 
                             expires_at, session_id
-                    FROM latest_token
+                    FROM latest_tokens
+                    WHERE token_hash = %s
+                    ORDER BY valid_from DESC
+                    LIMIT 1
                     ;
 
                 """, (token, token))
@@ -126,13 +126,6 @@ def gcs_ready():
                     logger.error(f"Mission {mission_id} is not in progress")
                     return jsonify({"status": "error", "reason": "mission is not in progress"}), 400
 
-                # Обновим миссию
-                #cur.execute("""
-                #    UPDATE grfp_missions
-                #    SET status = 'ready',
-                #        updated_at = %s
-                #    WHERE mission_id = %s
-                #""", (datetime.utcnow(), mission_id))
                 
                 # Write session to db
                 cur.execute("""
@@ -237,7 +230,7 @@ def gcs_session_finish():
         # Finish job
     threading.Thread(
             target=close_session,
-            args=(mission_id, session_id, result),
+            args=(session_id, result),
             daemon=True
         ).start()
 

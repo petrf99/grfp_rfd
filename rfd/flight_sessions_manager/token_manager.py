@@ -86,12 +86,15 @@ def create_token(mission_id, session_id, tag):
     return token
 
 
-def deactivate_token_db(session_id):
+def deactivate_token_db(session_id, tags=['gcs', 'client']):
     conn = get_conn()
-    try:
-        update_versioned(conn, 'grfp_sm_auth_tokens', 'session_id', session_id, {'is_active_flg':False})
-        logger.info(f"Deactivation of token for session {session_id} succeed\n")
-    except Exception as e:
-        logger.error(f"[!] Error in deactivate_token: {e}\n")
-    finally:
-        conn.close()
+    n_deact = 0
+    for tag in tags:
+        try:
+            update_versioned(conn, 'grfp_sm_auth_tokens', {'session_id':session_id, 'tag':tag}, {'is_active_flg':False})
+            logger.error(f"Deactivated token for session {session_id} and tag {tag}")
+            n_deact += 1
+        except Exception as e:
+            logger.error(f"Cannot deactivate token for session {session_id} and tag {tag}")
+    logger.info(f"Deactivated {n_deact} tokens for session {session_id}\n")
+    conn.close()

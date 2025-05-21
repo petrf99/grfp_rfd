@@ -24,68 +24,63 @@ from datetime import datetime, timezone
 def update_versioned(
     conn,
     table: str,
-    key_field: str,
-    key_value,
+    key_fields: dict,
     update_fields: dict,
 ):
     """
-    Обновляет версионную таблицу:
-    - закрывает текущую версию
-    - вставляет новую с новыми значениями
+    Обновляет версионную таблицу по нескольким ключевым полям.
+    - Закрывает текущую версию (valid_to)
+    - Вставляет новую строку (valid_from = now, valid_to = NULL)
     """
     now = datetime.now(timezone.utc)
 
-    # 1. Закрыть текущую активную запись
+    # Список условий и значений для WHERE
+    where_clauses = [f"{field} = %s" for field in key_fields]
+    where_sql = " AND ".join(where_clauses)
+    key_values = list(key_fields.values())
+
+    # 1. Закрываем текущую активную запись
     try:
         with conn.cursor() as cur:
             cur.execute(
                 f"""
                 UPDATE {table}
                 SET valid_to = %s
-                WHERE {key_field} = %s AND valid_to IS NULL
+                WHERE {where_sql} AND valid_to IS NULL
                 """,
-                (now, key_value),
+                [now] + key_values,
             )
     except psycopg2.errors.UndefinedTable as e:
         raise RuntimeError(f"Table '{table}' not found: {e}")
     except psycopg2.errors.UndefinedColumn as e:
-        raise RuntimeError(f"Column '{key_field}' not found in table '{table}': {e}")
+        raise RuntimeError(f"Column not found: {e}")
 
-
-    # 2. Получить последнюю строку как шаблон
+    # 2. Получаем последнюю версию
     with conn.cursor() as cur:
         cur.execute(
             f"""
             SELECT * FROM {table}
-            WHERE {key_field} = %s
+            WHERE {where_sql}
             ORDER BY valid_from DESC
             LIMIT 1
             """,
-            (key_value,)
+            key_values,
         )
         last_row = cur.fetchone()
+        if not last_row:
+            logger.warning(f"Update-versioned {table}: No existing row found for {key_fields}")
+            return
         desc = [d.name for d in cur.description]
 
-    if not last_row:
-        logger.warning(f"Update-versioned {table}: No existing row found for {key_field} = {key_value}")
-        return
-        #raise ValueError(f"No existing row found for {key_field} = {key_value}")
-
-    # 3. Создать новую запись на основе старой
+    # 3. Создаём новую строку
     new_row = dict(zip(desc, last_row))
-
-    # Обновляем нужные поля
     new_row.update(update_fields)
 
-    # Обновляем системные поля
     new_row["valid_from"] = now
     new_row["valid_to"] = None
-    new_row["created_at"] = now
-
-    # Удаляем автоинкрементный id, если есть
     new_row.pop("id", None)
 
-    # Формируем INSERT-запрос
+    # Подготовка к INSERT
     columns = ', '.join(new_row.keys())
     placeholders = ', '.join(['%s'] * len(new_row))
     values = list(new_row.values())

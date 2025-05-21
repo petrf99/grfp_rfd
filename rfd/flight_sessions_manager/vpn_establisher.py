@@ -6,7 +6,7 @@ import requests
 import time
 import os
 
-from tech_utils.db import get_conn, update_versioned
+from tech_utils.db import get_conn
 
 # === НАСТРОЙКИ ===
  
@@ -90,8 +90,8 @@ def is_sess_active(session_id):
 
 def gcs_client_connection_wait(mission_id, session_id, timeout=TIMEOUT, interval=POLL_INTERVAL):
     logger.info("Start connecting GCS and Client")
-    hostname_client = f"client-{session_id[:8]}"
-    hostname_gcs = f"gcs-{session_id[:8]}"
+    hostname_client = os.getenv("TEST_CLIENT_HOSTNAME", f"client-{session_id[:8]}")
+    hostname_gcs = os.getenv("TEST_GCS_HOSTNAME", f"gcs-{session_id[:8]}")
 
     start_time = time.time()
 
@@ -135,11 +135,6 @@ def gcs_client_connection_wait(mission_id, session_id, timeout=TIMEOUT, interval
 
             if time.time() - start_time > timeout:
                 logger.error(f"Timeout error. No connected devices for session_id={session_id} found")
-                
-                update_versioned(conn, 'grfp_sm_sessions', 'session_id', session_id, {'status':'abort'})
-                update_versioned(conn, 'vpn_connections', 'session_id', session_id, {'status':'abort'})
-
-                clear_tailnet(session_id)
                 logger.info(f"Session {session_id} disconnected due to timeout")
                 raise TimeoutError(f"Timeout error. No connected devices for session_id={session_id} found")
             

@@ -53,7 +53,7 @@ def change_mission_status():
     
     conn = get_conn()
     try:
-        update_versioned(conn, 'grfp_missions', 'mission_id', data['mission_id'], {'status': data['new_status']})
+        update_versioned(conn, 'grfp_missions', {'mission_id': data['mission_id']}, {'status': data['new_status']})
         logger.info(f"Successfully changed status for {data['mission_id']}. New status: {data['new_status']}")
         
         # Email alert to ground teams

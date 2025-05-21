@@ -9,14 +9,11 @@ import os
 from tech_utils.db import get_conn
 
 # === НАСТРОЙКИ ===
- 
+from rfd.config import TAILSCALE_IP_POLL_INTERVAL, TAILSCALE_IP_POLL_TIMEOUT, TAILSCALE_IPS_POLL_CHECK_FREQ
 TAILSCALE_API_KEY = os.getenv("TAILSCALE_API_KEY")
 TAILNET = os.getenv("TAILNET")
-POLL_INTERVAL = int(os.getenv("TAILSCALE_IP_POLL_INTERVAL"))
-TIMEOUT = int(os.getenv("TAILSCALE_IP_POLL_TIMEOUT", 600))
-TAILSCALE_IPS_POLL_CHECK_FREQ = int(os.getenv("TAILSCALE_IPS_POLL_CHECK_FREQ"))
 
-from rfd.flight_sessions_manager.tailscale_oauth import get_access_token
+from rfd.sessions_manager.tailscale_oauth import get_access_token
 
 def get_devices():
     url = f"https://api.tailscale.com/api/v2/tailnet/{TAILNET}/devices"
@@ -88,7 +85,7 @@ def is_sess_active(session_id):
             return False
 
 
-def gcs_client_connection_wait(mission_id, session_id, timeout=TIMEOUT, interval=POLL_INTERVAL):
+def gcs_client_connection_wait(mission_id, session_id, timeout=TAILSCALE_IP_POLL_TIMEOUT, interval=TAILSCALE_IP_POLL_INTERVAL):
     logger.info("Start connecting GCS and Client")
     hostname_client = os.getenv("TEST_CLIENT_HOSTNAME", f"client-{session_id[:8]}")
     hostname_gcs = os.getenv("TEST_GCS_HOSTNAME", f"gcs-{session_id[:8]}")

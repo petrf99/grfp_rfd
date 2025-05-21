@@ -1,7 +1,7 @@
 # main.py
 import threading
 from rfd.missions_manager.app import main as mission_app
-from rfd.flight_sessions_manager.app import main as session_app
+from rfd.sessions_manager.app import main as session_app
 
 
 def run_mission():

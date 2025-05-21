@@ -13,12 +13,6 @@ load_dotenv()
 
 from tech_utils.db import get_conn, update_versioned
 
-def generate_token():
-    raw = uuid.uuid4().hex
-    token = hashlib.md5(raw.encode()).hexdigest()
-    return token
-
-
 
 TAILSCALE_API_KEY = os.getenv("TAILSCALE_API_KEY")
 TAILNET = os.getenv("TAILNET")
@@ -26,7 +20,8 @@ TAILNET = os.getenv("TAILNET")
 if not TAILSCALE_API_KEY or not TAILNET:
     raise RuntimeError("TAILSCALE_API_KEY or TAILNET not set in environment")
 
-TS_AUTH_KEY_EXP_HOURS = int(os.getenv("TS_AUTH_KEY_EXP_HOURS", 3))
+from rfd.config import TOKEN_EXPIRE_TMP
+TS_AUTH_KEY_EXP_HOURS = TOKEN_EXPIRE_TMP // 3600
 
 # Создание нового auth key
 def create_tailscale_auth_key(session_id, tag: str = None, ephemeral=True, preauthorized=True, reusable=False, expiry_hours=TS_AUTH_KEY_EXP_HOURS):
@@ -57,7 +52,7 @@ def create_tailscale_auth_key(session_id, tag: str = None, ephemeral=True, preau
 
     if response.status_code == 200:
         data = response.json()
-        logger.info(f"Tailscale Auth Key created. Key: {data['key'][-10:]}. Expires in: {expiry_hours}d")
+        logger.info(f"Tailscale Auth Key created. Key: {data['key'][-10:]}. Expires in: {expiry_hours}h")
         return data['key'], expiry_hours
     else:
         logger.error(f"Failed to create key: {response.status_code}, {response.text}")
@@ -82,7 +77,7 @@ def create_token(mission_id, session_id, tag):
                 VALUES (%s, %s, %s, TRUE, %s, %s, %s)
             """, (hash_token(token), mission_id, session_id, tag, now, expires,))
             conn.commit()
-    logger.info(f"Tokens created successfully {token[-10:]}, {now}, {expires}\n")
+    logger.info(f"Tokens created successfully {token[-10:]}, {now}, {expires}. Hash: {hash_token(token)}")
     return token
 
 
@@ -92,7 +87,7 @@ def deactivate_token_db(session_id, tags=['gcs', 'client']):
     for tag in tags:
         try:
             update_versioned(conn, 'grfp_sm_auth_tokens', {'session_id':session_id, 'tag':tag}, {'is_active_flg':False})
-            logger.error(f"Deactivated token for session {session_id} and tag {tag}")
+            logger.info(f"Deactivated token for session {session_id} and tag {tag}")
             n_deact += 1
         except Exception as e:
             logger.error(f"Cannot deactivate token for session {session_id} and tag {tag}")

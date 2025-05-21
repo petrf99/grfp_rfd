@@ -5,8 +5,8 @@ from tech_utils.db import get_conn, update_versioned
 
 from datetime import datetime, timezone
 
-from rfd.flight_sessions_manager.vpn_establisher import clear_tailnet
-from rfd.flight_sessions_manager.token_manager import deactivate_token_db
+from rfd.sessions_manager.vpn_establisher import clear_tailnet
+from rfd.sessions_manager.token_manager import deactivate_token_db
 
 
 def close_session(session_id, result):

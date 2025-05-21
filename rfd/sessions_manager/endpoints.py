@@ -7,9 +7,9 @@ import threading
 from tech_utils.logger import init_logger
 logger = init_logger("RFD_FSM_Endpoints")
 
-from rfd.flight_sessions_manager.vpn_establisher import gcs_client_connection_wait, clear_tailnet
+from rfd.sessions_manager.vpn_establisher import gcs_client_connection_wait
 
-from tech_utils.db import get_conn
+from tech_utils.db import get_conn, update_versioned
 
 def validate_token():
     data = request.get_json()
@@ -74,8 +74,13 @@ def validate_token():
 
 
 
-from rfd.flight_sessions_manager.token_manager import create_token, deactivate_token_db
+from rfd.sessions_manager.token_manager import create_token
 import os
+
+import base64
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import hashes
 
 GCS_PROOF_TOKEN = os.getenv("GCS_PROOF_TOKEN")
 
@@ -92,10 +97,17 @@ def gcs_ready():
     gcs_proof_token = data.get("gcs_proof_token")
 
     if gcs_proof_token != GCS_PROOF_TOKEN:
-        return jsonify({"status": "error", "reason": "Seems like your are not GCS"}), 400
+        return jsonify({"status": "error", "reason": "Seems like your are not GCS"}), 403
 
     if not mission_id:
         return jsonify({"status": "error", "reason": "Missing mission_id"}), 400
+    
+    public_pem = data.get("rsa_pub_key")
+    if not public_pem:
+        return jsonify({"status": "error", "reason": "Missing public key"}), 400
+    
+    public_key = serialization.load_pem_public_key(public_pem.encode())
+
 
     try:
         session_id = str(uuid.uuid4())
@@ -120,11 +132,11 @@ def gcs_ready():
                     status = row[0]
                 else:
                     logger.error(f"Mission {mission_id} not found")
-                    return jsonify({"status": "error", "reason": "mission not found"}), 400
+                    return jsonify({"status": "error", "reason": "mission not found"}), 403
 
                 if status != 'in progress':
                     logger.error(f"Mission {mission_id} is not in progress")
-                    return jsonify({"status": "error", "reason": "mission is not in progress"}), 400
+                    return jsonify({"status": "error", "reason": "mission is not in progress"}), 403
 
                 
                 # Write session to db
@@ -142,12 +154,18 @@ def gcs_ready():
             daemon=True
         ).start()
 
+        encrypted_token = public_key.encrypt(
+            token.encode(),
+            padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
+        )
+
+        encrypted_b64 = base64.b64encode(encrypted_token).decode()
 
         logger.info(f"GCS for mission {mission_id} marked as ready. Session: {session_id}")
         return jsonify({
             "status": "ok",
             "session_id": session_id,
-            "auth_token": token
+            "auth_token": encrypted_b64
         })
 
     except Exception as e:
@@ -168,10 +186,36 @@ def get_tailscale_ips():
 
     if not session_id:
         return jsonify({"status": "error", "reason": "Missing session_id"}), 400
+    
+    hash_auth_token = data.get("hash_auth_token")
+    if not hash_auth_token:
+        return jsonify({"status": "error", "reason": "Missing hash_auth_token"}), 400
 
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
+                cur.execute("""
+                            SELECT id, used_at
+                            FROM grfp_sm_auth_tokens
+                            WHERE is_active_flg = TRUE
+                            AND valid_to IS NULL
+                            AND token_hash = %s
+                            AND session_id = %s
+                            LIMIT 1
+                            """, (hash_auth_token, session_id))
+                
+                row = cur.fetchone()
+
+                if not row:
+                    logger.info(f"Request for tailscale ips failed - invalid hash_auth_token: {hash_auth_token}. Session_id: {session_id}")
+                    return jsonify({"status": "error", "reason": "Auth failed: invalid hash_auth_token"}), 403
+                
+                token_id, used_at = row
+
+                if used_at is None:
+                    update_versioned(conn, 'grfp_sm_auth_tokens', {'id': token_id}, {'used_at': datetime.now(timezone.utc)})
+
+
                 cur.execute("""
                     SELECT gcs_ip, client_ip
                     FROM vpn_connections
@@ -196,7 +240,7 @@ def get_tailscale_ips():
         return jsonify({"status": "error", "reason": "Internal server error"}), 500
     
 
-from rfd.flight_sessions_manager.session_manager import close_session
+from rfd.sessions_manager.session_manager import close_session
 def gcs_session_finish():
     data = request.get_json()
     if not data:

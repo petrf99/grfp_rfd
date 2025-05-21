@@ -1,19 +1,18 @@
 from flask import Flask, request, jsonify
 
-from rfd.flight_sessions_manager.endpoints import validate_token, gcs_ready, get_tailscale_ips, gcs_session_finish
+from rfd.sessions_manager.endpoints import validate_token, gcs_ready, get_tailscale_ips, gcs_session_finish
 
 from tech_utils.logger import init_logger
 logger = init_logger("RFD_FlightSessionsManagerServer")
 
+from rfd.config import CLEAN_SM_DB_INTERVAL
+
 app = Flask(__name__)
 
-import os
-CLEAN_SM_DB_INTERVAL = int(os.getenv("CLEAN_SM_DB_INTERVAL"))
-
 from apscheduler.schedulers.background import BackgroundScheduler
-from rfd.flight_sessions_manager.session_manager import clean_sm_db
+from rfd.sessions_manager.session_manager import clean_sm_db
 
-from rfd.flight_sessions_manager.db_init import db_init
+from rfd.sessions_manager.db_init import db_init
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(clean_sm_db, "interval", seconds=CLEAN_SM_DB_INTERVAL)

@@ -9,7 +9,7 @@ def db_init():
         logger.info("RFDMM tables start creation")
         try:
             with conn.cursor() as cur:
-                cur.execute("""
+                cur.execute("""    
                     CREATE TABLE IF NOT EXISTS grfp_missions (
                     id SERIAL PRIMARY KEY,
                     mission_id UUID NOT NULL,

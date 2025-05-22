@@ -1,4 +1,4 @@
-from rfd.flight_sessions_manager.vpn_establisher import get_devices, get_auth_keys, delete_auth_key, delete_device
+from rfd.sessions_manager.vpn_establisher import get_devices, get_auth_keys, delete_auth_key, delete_device
 
 def reset_tailnet():
     devices = get_devices()

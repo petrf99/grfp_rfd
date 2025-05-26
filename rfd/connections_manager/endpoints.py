@@ -82,26 +82,26 @@ def get_vpn_connection():
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(f"""
-                    SELECT * FROM grfp_missions WHERE {parent_name} = {parent_id}
-                    WHERE status = 'in progress'
+                    SELECT * FROM grfp_missions WHERE {parent_name} = %s
+                    AND status = 'in progress'
                     AND valid_to IS NULL
-                    """)
+                    """, (parent_id,))
                 row = cur.fetchone()
 
                 if not row:
-                    logger.warning(f"get-vpn-connection: missions found in grfp_missions table for {parent_name}={parent_id}")
-                    return jsonify({"status": "error", "reason": "No active missions"}), 403
+                    logger.warning(f"get-vpn-connection: missions not found in grfp_missions table for {parent_name}={parent_id}")
+                    return jsonify({"status": "error", "reason": "Missions not found"}), 403
 
                 if tag == 'client':
-                    cur.execute(f"""
+                    cur.execute("""
                         SELECT session_id
                         FROM grfp_sessions
                         WHERE valid_to IS NULL
-                        AND mission_id = {parent_id}
+                        AND mission_id = %s
                         AND status = 'in progress'
                         ORDER BY valid_from DESC
                         LIMIT 1
-                                """)
+                                """, (parent_id,))
 
                     row = cur.fetchone()
                     if not row:
@@ -115,10 +115,10 @@ def get_vpn_connection():
 
                 token, token_hash, expires, hostname = create_token(hostname_base, tag)
 
-                cur.execute(f"""
+                cur.execute("""
                 INSERT INTO vpn_connections (parent_id, parent_name, token_hash, hostname, tag, token_expires_at)
-                VALUES ({parent_id}, {parent_name}, {token_hash}, {hostname}, {tag}, {expires})
-                """)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """, (parent_id, parent_name, token_hash, hostname, tag, expires))
                 conn.commit()
 
                 encrypted_token = public_key.encrypt(
@@ -150,11 +150,14 @@ def delete_vpn_connection():
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"""
-                    SELECT * FROM vpn_connections WHERE hostname = {hostname} and token_hash = {token_hash}
-                    WHERE is_active_flg = TRUE
+                cur.execute("""
+                    SELECT * 
+                    FROM vpn_connections 
+                    WHERE hostname = %s 
+                    AND token_hash = %s
+                    AND is_active_flg = TRUE
                     AND valid_to IS NULL
-                    """)
+                    """, (hostname, token_hash))
                 row = cur.fetchone()
 
                 if not row:
@@ -196,8 +199,19 @@ def start_session():
     
         with get_conn() as conn:
             with conn.cursor() as cur:
+                cur.execute(f"""
+                    SELECT * FROM grfp_missions WHERE missin_id = %s
+                    AND status = 'in progress'
+                    AND valid_to IS NULL
+                    """, (mission_id,))
+                row = cur.fetchone()
+
+                if not row:
+                    logger.warning(f"start-session: missions not found in grfp_missions table for mission_id={mission_id}")
+                    return jsonify({"status": "error", "reason": "Mission not found"}), 403
+
                 cur.execute("""
-                        INSERT INTO grfp_sm_sessions 
+                        INSERT INTO grfp_sessions 
                                 (session_id, mission_id, status)
                         VALUES (%s, %s, 'in progress')
                     """, (session_id, mission_id))
@@ -231,7 +245,7 @@ def close_session():
     
         with get_conn() as conn:
             with conn.cursor() as cur:
-                update_versioned(conn, 'grfp_sessions', {'session_id', session_id}, {'status': result})
+                update_versioned(conn, 'grfp_sessions', {'session_id': session_id}, {'status': result})
 
         logger.info(f"close-session: success. Session ID: {session_id}")
         return jsonify({"status": "ok"}), 200

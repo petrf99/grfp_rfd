@@ -9,10 +9,6 @@ def db_init():
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-
-                    CREATE UNIQUE INDEX IF NOT EXISTS uq_active_auth_token ON grfp_auth_tokens(token_hash)
-                    WHERE valid_to IS NULL;
-
                     CREATE TABLE IF NOT EXISTS grfp_sessions (
                         id SERIAL PRIMARY KEY,
                         session_id UUID NOT NULL,
@@ -34,16 +30,15 @@ def db_init():
                         parent_name VARCHAR NOT NULL,
                         hostname VARCHAR NOT NULL,
                         token_hash VARCHAR NOT NULL,
-                        token_expires_at TIMESTAMPZ NOT NULL,
+                        token_expires_at TIMESTAMPTZ NOT NULL,
                         is_active_flg BOOLEAN NOT NULL DEFAULT true,
                         created_at TIMESTAMPTZ DEFAULT now(),
                         valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
                         valid_to TIMESTAMPTZ DEFAULT NULL,
-                        UNIQUE (session_id, valid_from)
+                        UNIQUE (id, valid_from)
                     );
 
-                    CREATE UNIQUE INDEX IF NOT EXISTS uq_active_vpn_mission ON vpn_connections(session_id)
-                    WHERE valid_to IS NULL;
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_active_vpn_mission ON vpn_connections(id) WHERE valid_to IS NULL;
 
                     """)
                 conn.commit()

@@ -15,10 +15,10 @@ def reset_db():
                     DROP TABLE IF EXISTS grfp_drone_types;
                     
                     DROP TABLE IF EXISTS grfp_locations;
-                            
-                    DROP TABLE IF EXISTS grfp_sm_auth_tokens;
 
-                    DROP TABLE IF EXISTS grfp_sm_sessions;
+                    DROP TABLE IF EXISTS grfp_mission_groups;
+
+                    DROP TABLE IF EXISTS grfp_sessions;
                             
                     DROP TABLE IF EXISTS vpn_connections;
                     """)

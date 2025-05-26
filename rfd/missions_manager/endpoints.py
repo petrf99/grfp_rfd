@@ -56,10 +56,14 @@ def mission_request():
 
 
 def mission_group_request():
+    logger.info("Mission group request received")
     data = request.get_json()
-    if "mission_group" is data:
+    if "mission_group" in data:
         mission_group = data.get('mission_group')
         logger.info(f"mission-group-request received {mission_group}")
+    else:
+        return jsonify({"status": "error", "reason": "Missing mission_group value"}), 400
+
 
     try:
         with get_conn() as conn:
@@ -67,18 +71,18 @@ def mission_group_request():
                 sql = f"""
                     SELECT *
                     FROM grfp_mission_groups
-                    WHERE mission_group = {mission_group}
+                    WHERE mission_group = %s
                     AND valid_to IS NULL
                 """
-                cur.execute(sql)
+                cur.execute(sql, (mission_group,))
 
                 if cur.fetchall():
                     logger.error(f"Error creating mission group {mission_group}: Mission group already exists", exc_info=True)
                     return jsonify({"status": "error", "reason": "Mission group already exists"}), 400
                 
                 cur.execute(f"""
-                INSERT INTO grfp_mission_groups (mission_group) VALUES ({mission_group})   
-                            """)
+                INSERT INTO grfp_mission_groups (mission_group) VALUES (%s)   
+                            """, (mission_group,))
 
                 conn.commit()
 

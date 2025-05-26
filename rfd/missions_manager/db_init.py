@@ -34,11 +34,9 @@ def db_init():
                     created_at TIMESTAMPTZ DEFAULT now(),
                     valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
                     valid_to TIMESTAMPTZ DEFAULT NULL,
-                    UNIQUE (mission_group_id, valid_from)
+                    UNIQUE (mission_group, valid_from)
                     );
                     CREATE UNIQUE INDEX ON grfp_mission_groups(mission_group) WHERE valid_to IS NULL;
-                            
-                    INSERT INTO grfp_mission_groups (mission_group) VALUES ('default');
 
 
                     CREATE TABLE IF NOT EXISTS grfp_drone_types (
@@ -67,6 +65,10 @@ def db_init():
                             );
                             CREATE UNIQUE INDEX ON grfp_locations(location_id) WHERE valid_to IS NULL;
                     """)
+                
+                cur.execute("SELECT * FROM grfp_mission_groups")
+                if not cur.fetchone():
+                    cur.execute("INSERT INTO grfp_mission_groups (mission_group) VALUES ('default');")
                 conn.commit()
                 logger.info("RFDMM tables created")
         except Exception as e:

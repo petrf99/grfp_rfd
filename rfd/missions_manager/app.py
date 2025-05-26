@@ -1,9 +1,9 @@
 from flask import Flask, request, jsonify
 
-from rfd.missions_manager.endpoints import mission_request, get_missions_list, change_mission_status
+from rfd.missions_manager.endpoints import mission_request, mission_group_request, get_missions_list, change_mission_status
 
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_MissionsManagerServer")
+logger = init_logger("RFD_MM_Server")
 
 app = Flask(__name__)
 
@@ -17,6 +17,7 @@ scheduler.add_job(alert_pending_tasks, "interval", hours=3)
 scheduler.start()
 
 app.add_url_rule("/mission-request", view_func=mission_request, methods=["POST"])
+app.add_url_rule("/mission-group-request", view_func=mission_group_request, methods=["POST"])
 app.add_url_rule("/change-mission-status", view_func=change_mission_status, methods=["POST"])
 app.add_url_rule("/get-missions-list", view_func=get_missions_list, methods=["POST"])
 

@@ -1,7 +1,7 @@
 from tech_utils.db import get_conn
 
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_MissionsManager")
+logger = init_logger("RFD_MM_DBinit")
 
 
 def db_init():
@@ -13,6 +13,7 @@ def db_init():
                     CREATE TABLE IF NOT EXISTS grfp_missions (
                     id SERIAL PRIMARY KEY,
                     mission_id UUID NOT NULL,
+                    mission_group VARCHAR DEFAULT 'default',
                     user_id varchar(255),
                     location varchar(255),
                     time_window varchar(255),
@@ -25,6 +26,19 @@ def db_init():
                     UNIQUE (mission_id, valid_from)
                     );
                     CREATE UNIQUE INDEX ON grfp_missions(mission_id) WHERE valid_to IS NULL;
+                            
+                    CREATE TABLE IF NOT EXISTS grfp_mission_groups (
+                    id SERIAL PRIMARY KEY,
+                    mission_group VARCHAR NOT NULL,
+                    parameters JSONB,
+                    created_at TIMESTAMPTZ DEFAULT now(),
+                    valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    valid_to TIMESTAMPTZ DEFAULT NULL,
+                    UNIQUE (mission_group_id, valid_from)
+                    );
+                    CREATE UNIQUE INDEX ON grfp_mission_groups(mission_group) WHERE valid_to IS NULL;
+                            
+                    INSERT INTO grfp_mission_groups (mission_group) VALUES ('default');
 
 
                     CREATE TABLE IF NOT EXISTS grfp_drone_types (

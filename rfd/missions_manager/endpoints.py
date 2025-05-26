@@ -15,15 +15,29 @@ def mission_request():
     if not data or not all(k in data for k in required):
         return jsonify({"status": "error", "reason": "Missing parameters"}), 400
 
+    columns = ['mission_id']
+    placeholders = ['%s']
+    values = [mission_id]  
+
+    if "mission_group" in data:
+        columns.append('mission_group')
+        placeholders.append('%s')
+        values.append(data["mission_group"])
+
+    columns += ['user_id', 'location', 'time_window', 'drone_type']
+    placeholders += ['%s'] * 4
+    values += [data['user_id'], data["location"], data["time_window"], data["drone_type"]]
 
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO grfp_missions (mission_id, user_id, location, time_window, drone_type)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (mission_id, data['user_id'], data["location"], data["time_window"], data["drone_type"]))
+                sql = f"""
+                    INSERT INTO grfp_missions ({', '.join(columns)})
+                    VALUES ({', '.join(placeholders)})
+                """
+                cur.execute(sql, values)
                 conn.commit()
+
 
         logger.info(f"Mission request processed: {mission_id}")
 
@@ -37,8 +51,44 @@ def mission_request():
 
     except Exception as e:
         logger.error(f"Error creating mission {mission_id}: {e}", exc_info=True)
-        return jsonify({"status": "error", "reason": "DB insert error"}), 500
+        return jsonify({"status": "error", "reason": "Internal server error"}), 500
 
+
+
+def mission_group_request():
+    data = request.get_json()
+    if "mission_group" is data:
+        mission_group = data.get('mission_group')
+        logger.info(f"mission-group-request received {mission_group}")
+
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                sql = f"""
+                    SELECT *
+                    FROM grfp_mission_groups
+                    WHERE mission_group = {mission_group}
+                    AND valid_to IS NULL
+                """
+                cur.execute(sql)
+
+                if cur.fetchall():
+                    logger.error(f"Error creating mission group {mission_group}: Mission group already exists", exc_info=True)
+                    return jsonify({"status": "error", "reason": "Mission group already exists"}), 400
+                
+                cur.execute(f"""
+                INSERT INTO grfp_mission_groups (mission_group) VALUES ({mission_group})   
+                            """)
+
+                conn.commit()
+
+
+        logger.info(f"Mission group request processed: {mission_group}")
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        logger.error(f"Error creating mission group {mission_group}: {e}", exc_info=True)
+        return jsonify({"status": "error", "reason": "Internal server error"}), 500
 
 
 def change_mission_status():
@@ -73,33 +123,34 @@ def change_mission_status():
 def get_missions_list():
     logger.info(f"get-missions-list request received")
     data = request.get_json(silent=True) or {}
-    
+
+    where_clauses = ["valid_to IS NULL"]
+    args = []
+
+    if "user_id" in data:
+        where_clauses.append("user_id = %s")
+        args.append(data["user_id"])
+
+    if "mission_group" in data:
+        where_clauses.append("mission_group = %s")
+        args.append(data["mission_group"])
+
+    where_sql = " AND ".join(where_clauses)
+
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                if not data.get("user_id"):
-                    cur.execute("""
-                        SELECT *
-                        FROM grfp_missions
-                        WHERE valid_to IS NULL
-                        ORDER BY created_at DESC
-                    """)
-                    rows = cur.fetchall()
-                    logger.info(f"Succseffully fetched missions list")
-                else:
-                    cur.execute("""
-                        SELECT *
-                        FROM grfp_missions
-                        WHERE user_id = %s
-                        and valid_to IS NULL
-                        ORDER BY created_at DESC
-                    """, (data['user_id'],))
-                    rows = cur.fetchall()
-                    logger.info(f"Succseffully fetched missions list for user {data['user_id']}")
-        
+                cur.execute(f"""
+                    SELECT *
+                    FROM grfp_missions
+                    WHERE {where_sql}
+                    ORDER BY valid_from DESC
+                """, args)
+                rows = cur.fetchall()
+                logger.info(f"Successfully fetched missions list")
 
         return jsonify({'status': 'ok', 'data': rows})
-                
+
     except Exception as e:
         logger.error(f"Error in getting missions list: {e}", exc_info=True)
-        return jsonify({"status": "error", "reason": "DB insert error"}), 500
+        return jsonify({"status": "error", "reason": "Internal server error"}), 500

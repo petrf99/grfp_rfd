@@ -1,30 +1,20 @@
-import os
 import hashlib
-import uuid
 import requests
 import json
 from datetime import datetime, timedelta, timezone
-from dotenv import load_dotenv
 
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_FSM_TokenManager")
-
-load_dotenv()
-
-from tech_utils.db import get_conn, update_versioned
+logger = init_logger("RFD_CM_TokenManager")
 
 
-TAILSCALE_API_KEY = os.getenv("TAILSCALE_API_KEY")
-TAILNET = os.getenv("TAILNET")
-
+from rfd.config import TOKEN_EXPIRE_TMP, TAILSCALE_API_KEY, TAILNET
 if not TAILSCALE_API_KEY or not TAILNET:
     raise RuntimeError("TAILSCALE_API_KEY or TAILNET not set in environment")
 
-from rfd.config import TOKEN_EXPIRE_TMP
 TS_AUTH_KEY_EXP_HOURS = TOKEN_EXPIRE_TMP // 3600
 
 # Создание нового auth key
-def create_tailscale_auth_key(session_id, tag: str = None, ephemeral=True, preauthorized=True, reusable=False, expiry_hours=TS_AUTH_KEY_EXP_HOURS):
+def create_tailscale_auth_key(hostname, tag, ephemeral=True, preauthorized=True, reusable=False, expiry_hours=TS_AUTH_KEY_EXP_HOURS):
     url = f"https://api.tailscale.com/api/v2/tailnet/{TAILNET}/keys"
 
     headers = {
@@ -45,7 +35,7 @@ def create_tailscale_auth_key(session_id, tag: str = None, ephemeral=True, preau
             }
         },
         "expirySeconds": expiry_hours * 3600,
-        "description": f"{tag}-{session_id[:8]}"
+        "description": hostname
     }
 
     response = requests.post(url, headers=headers, auth=auth, data=json.dumps(payload))
@@ -64,32 +54,14 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest().upper()
 
 
-def create_token(mission_id, session_id, tag):
-    token, exp_hours = create_tailscale_auth_key(session_id=session_id, tag=tag)
+def create_token(hostname_base, tag):
+    hostname = tag + '-' + str(hostname_base)[-8:]
+    token, exp_hours = create_tailscale_auth_key(hostname, tag)
+    token_hash = hash_token(token)
     now = datetime.now(timezone.utc)
     expires = now + timedelta(hours=exp_hours)
 
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO grfp_sm_auth_tokens 
-                (token_hash, mission_id, session_id, is_active_flg, tag, created_at, expires_at)
-                VALUES (%s, %s, %s, TRUE, %s, %s, %s)
-            """, (hash_token(token), mission_id, session_id, tag, now, expires,))
-            conn.commit()
+
+
     logger.info(f"Tokens created successfully {token[-10:]}, {now}, {expires}. Hash: {hash_token(token)}")
-    return token
-
-
-def deactivate_token_db(session_id, tags=['gcs', 'client']):
-    conn = get_conn()
-    n_deact = 0
-    for tag in tags:
-        try:
-            update_versioned(conn, 'grfp_sm_auth_tokens', {'session_id':session_id, 'tag':tag}, {'is_active_flg':False})
-            logger.info(f"Deactivated token for session {session_id} and tag {tag}")
-            n_deact += 1
-        except Exception as e:
-            logger.error(f"Cannot deactivate token for session {session_id} and tag {tag}")
-    logger.info(f"Deactivated {n_deact} tokens for session {session_id}\n")
-    conn.close()
+    return token, token_hash, expires, hostname

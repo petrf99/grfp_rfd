@@ -16,7 +16,7 @@ def clean_session(session_id, result):
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT status
-                    FROM grfp_sm_sessions
+                    FROM grfp_sessions
                     WHERE session_id = %s
                     AND valid_to IS NULL
                             """, (session_id,))
@@ -45,7 +45,7 @@ def clean_session(session_id, result):
 
                 
         # Update session status
-        update_versioned(conn, 'grfp_sm_sessions', {'session_id': session_id}, {'status': result})
+        update_versioned(conn, 'grfp_sessions', {'session_id': session_id}, {'status': result})
 
         # Upd vpn connection status
         update_versioned(conn, 'vpn_connections', {'parent_id': session_id}, {'is_active_flg':False})
@@ -76,7 +76,7 @@ def cleaner():
                                    PARTITION BY mission_id
                                    ORDER BY valid_from DESC
                                ) AS row_num
-                        FROM grfp_sm_sessions
+                        FROM grfp_sessions
                         WHERE valid_to IS NULL
                         and status = 'in progress'
                     )

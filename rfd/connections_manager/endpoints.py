@@ -200,7 +200,7 @@ def start_session():
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(f"""
-                    SELECT * FROM grfp_missions WHERE missin_id = %s
+                    SELECT * FROM grfp_missions WHERE mission_id = %s
                     AND status = 'in progress'
                     AND valid_to IS NULL
                     """, (mission_id,))

@@ -230,7 +230,7 @@ def close_session():
     data = request.get_json()
     required = ["session_id", "result", "gcs_proof_token"]
     if not data or not all(k in data for k in required):
-        logger.warning(f"delete-vpn-connection: Missing parameters in {data}")
+        logger.warning(f"close-session: Missing parameters in {data}")
         return jsonify({"status": "error", "reason": "Missing parameters"}), 400
     
     session_id = data.get("session_id")
@@ -245,6 +245,20 @@ def close_session():
     
         with get_conn() as conn:
             with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT * 
+                    FROM grfp_sessions
+                    WHERE session_id = %s
+                    AND valid_to IS NULL
+                    AND status = 'in progress'
+                """, (session_id,))
+
+                row = cur.fetchone()
+
+                if not row:
+                    logger.warning(f"close-session: sessions not found in grfp_sessions table for session_id={session_id}")
+                    return jsonify({"status": "error", "reason": "Session not found"}), 403
+                
                 update_versioned(conn, 'grfp_sessions', {'session_id': session_id}, {'status': result})
 
         logger.info(f"close-session: success. Session ID: {session_id}")

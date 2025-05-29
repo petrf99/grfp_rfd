@@ -1,0 +1,80 @@
+Mission Manager API (RFD-MM)
+=================================
+
+This service manages missions and mission groups within the GRFP platform.
+All endpoints are accessible under the base URL: http://<RFD_MM_HOST>:8000
+
+Endpoints
+---------
+
+1. POST /mission-request
+   ---------------------
+   Purpose: Create a new mission request.
+
+   Request Body (JSON):
+       {
+           "user_id": "operator123",
+           "location": "Arctic Station",
+           "time_window": "2024-06-01T10:00Z/2024-06-01T12:00Z",
+           "drone_type": "quad",
+           "mission_group": "group_alpha"   // optional
+       }
+
+   Success Response:
+       { "status": "ok" }
+
+   Failure Response:
+       { "status": "error", "reason": "Missing parameters" }
+
+
+2. POST /mission-group-request
+   ----------------------------
+   Purpose: Create a new mission group.
+
+   Request Body (JSON):
+       {
+           "mission_group": "group_alpha"
+       }
+
+   Success Response:
+       { "status": "ok" }
+
+   Failure Response:
+       { "status": "error", "reason": "Mission group already exists" }
+
+
+3. POST /change-mission-status
+   ----------------------------
+   Purpose: Change the status of an existing mission.
+
+   Request Body (JSON):
+       {
+           "mission_id": "<uuid>",
+           "new_status": "approved"
+       }
+
+   Success Response:
+       { "status": "ok" }
+
+   Failure Response:
+       { "status": "error", "reason": "Missing parameters" }
+
+
+4. POST /get-missions-list
+   ------------------------
+   Purpose: Retrieve a list of active missions.
+
+   Optional Filters in Request Body (JSON):
+       {
+           "user_id": "operator123",
+           "mission_group": "group_alpha"
+       }
+
+   Success Response:
+       {
+           "status": "ok",
+           "data": [ {mission_object_1}, {mission_object_2}, ... ]
+       }
+
+   Failure Response:
+       { "status": "error", "reason": "Internal server error" }

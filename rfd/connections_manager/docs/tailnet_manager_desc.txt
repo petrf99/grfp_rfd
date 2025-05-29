@@ -1,0 +1,96 @@
+# Tailscale Token Management in RFD Connections Manager
+
+This service uses the Tailscale API to dynamically manage ephemeral authentication keys
+for devices connecting to the VPN network (e.g., GCS and Client nodes). Below is an
+overview of how token creation, validation, and cleanup are implemented in the RFD
+Connections Manager.
+
+---
+
+## 1. Overview
+
+The token management logic supports:
+
+- Creating preauthorized, ephemeral Tailscale auth keys.
+- Hashing tokens for secure reference in the database.
+- Assigning descriptive hostnames to each key.
+- Automatically removing expired or orphaned tokens and devices from the Tailnet.
+
+Environment variables required:
+- `TAILSCALE_API_KEY` — API key for Tailscale (used for key deletion and auth key listing).
+- `TAILNET` — Your Tailscale tailnet (e.g., `example@gmail.com`).
+- `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET` — For OAuth token flow (device management).
+
+---
+
+## 2. Token Creation
+
+Function: `create_token(hostname_base: str, tag: str)`
+
+- Generates a hostname using the tag and a suffix of the base string.
+- Calls `create_tailscale_auth_key(...)` with parameters:
+  - `ephemeral=True` (device auto-expires after use),
+  - `preauthorized=True` (device joins without approval),
+  - `reusable=False` (single-use).
+- Returns the raw token, its SHA256 hash, its expiration timestamp, and hostname.
+
+This key is stored in the database alongside its hash and expiration time.
+
+---
+
+## 3. Token Hashing
+
+Function: `hash_token(token: str)`
+
+- Uses SHA-256 to hash the raw token.
+- Hash is stored and used to reference the token without revealing the original value.
+
+Hash format: Uppercase hexadecimal string.
+
+---
+
+## 4. Device and Token Cleanup
+
+Function: `remove_from_tailnet(target_hostname: str)`
+
+- Lists all connected devices (`get_devices()`) and filters by hostname.
+- Deletes the matching device using its Tailscale device ID.
+- Lists all auth keys (`get_auth_keys()`) and deletes any with a matching description (hostname).
+
+Additional cleanup is performed by a scheduled job (`cleaner()` in `cleaner.py`), which:
+- Aborts orphaned sessions.
+- Deactivates VPN connections in the DB.
+- Triggers `remove_from_tailnet()` to clean devices and keys from Tailscale.
+
+---
+
+## 5. API Endpoints Using Tokens
+
+- `/get-vpn-connection` — Generates a token and encrypted response for GCS or Client.
+- `/delete-vpn-connection` — Deactivates token and VPN connection.
+- `/start-session`, `/close-session` — Manage the session lifecycle tied to issued tokens.
+
+---
+
+## 6. Security Considerations
+
+- All tokens are encrypted before being sent to the client (using RSA public key).
+- Only token hashes are stored in the database.
+- Tokens are ephemeral and expire automatically based on configuration (`TOKEN_EXPIRE_TMP`).
+- Expired tokens/devices are cleaned regularly.
+
+---
+
+## 7. Logging
+
+Each step logs details (masked tokens, hostname, session ID) using a structured logger (`logger = init_logger("RFD_CM_TokenManager")`) to allow traceability.
+
+---
+
+## 8. Failure Modes
+
+- If Tailscale API returns an error during token creation, a `RuntimeError` is raised.
+- If environment variables are not set, the service halts at startup.
+- On deletion failure, errors are logged but processing continues for other entries.
+
+---

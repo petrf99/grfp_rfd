@@ -1,0 +1,56 @@
+===============================
+Missions Manager (RFD Server)
+===============================
+
+REST API server for managing drone missions.
+This service handles creation, update, listing, and tracking of missions.
+
+-------------------------
+Run Location: rfd/missions_manager/server.py
+-------------------------
+
+----------
+Endpoints:
+----------
+
+1. POST /mission-request
+   Create or update a single mission.
+   Body: JSON with mission data.
+
+2. POST /mission-group-request
+   Create multiple missions in a batch.
+
+3. POST /change-mission-status
+   Update mission status.
+   Body: { mission_id, new_status }
+
+4. POST /get-missions-list
+   Fetch list of all missions, filtered if needed.
+
+---------------------
+Background Scheduler:
+---------------------
+Runs `alert_pending_tasks` every 3 hours.
+
+This function is used to scan for pending or overdue missions,
+and optionally logs or sends alerts.
+
+--------------------
+Startup Process:
+--------------------
+1. Initialize DB schema (via db_init)
+2. Start Flask app on 0.0.0.0:8000
+3. Start background scheduler
+
+--------------------
+Logs:
+--------------------
+Logger: RFD_MM_Server
+
+--------------------
+Dependencies:
+--------------------
+- Flask
+- APScheduler
+- PostgreSQL (via psycopg2)
+- .env file for DB config

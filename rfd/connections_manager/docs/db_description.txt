@@ -1,0 +1,45 @@
+# RFD Connection Manager Database Tables Documentation
+
+This document describes the structure and purpose of the database tables used by the RFD Connection Manager module.
+
+---
+
+## Table: grfp_sessions
+
+Tracks individual flight sessions that occur under a mission.
+
+### Columns:
+- **id**: Internal auto-incremented primary key.
+- **session_id**: UUID used to uniquely identify the session.
+- **mission_id**: UUID referencing the parent mission.
+- **status**: Current status of the session (e.g., 'in progress', 'finished', 'aborted').
+- **created_at**: Timestamp when the session record was created.
+- **valid_from**: Timestamp indicating when this version of the row became valid.
+- **valid_to**: Timestamp indicating when this version of the row became invalid (NULL means active).
+
+### Indexes:
+- **uq_active_session_id**: Ensures that only one active (valid_to IS NULL) session exists for a given session_id.
+
+---
+
+## Table: vpn_connections
+
+Stores metadata about VPN connections issued to clients or ground control stations (GCS).
+
+### Columns:
+- **id**: Internal auto-incremented primary key.
+- **tag**: String indicating role ('client' or 'gcs').
+- **parent_id**: Identifier of the associated mission or session.
+- **parent_name**: Describes the type of parent ('mission_id' or 'session_id').
+- **hostname**: Unique Tailscale hostname assigned.
+- **token_hash**: Hashed form of the issued VPN token.
+- **token_expires_at**: Expiration timestamp of the VPN token.
+- **is_active_flg**: Boolean flag indicating whether the VPN connection is currently active.
+- **created_at**: Timestamp when the VPN record was created.
+- **valid_from**: Versioning start timestamp.
+- **valid_to**: Versioning end timestamp (NULL means currently valid).
+
+### Indexes:
+- **uq_active_vpn_mission**: Ensures only one active version of a VPN connection entry exists at a time.
+
+---

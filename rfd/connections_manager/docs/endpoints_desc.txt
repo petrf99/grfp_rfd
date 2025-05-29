@@ -1,0 +1,95 @@
+RFD Connections Manager - REST API Documentation
+=================================================
+
+Base URL: http://<HOST>:8001/
+
+1. POST /register-gcs
+---------------------
+Registers a new GCS (Ground Control Station) and returns a unique proof token.
+
+Request:
+    No JSON body required.
+
+Response:
+    {
+        "status": "ok",
+        "gcs_proof_token": "<string>"
+    }
+
+
+2. POST /get-vpn-connection
+---------------------------
+Generates and returns an encrypted VPN token for a client or GCS to join the Tailscale network.
+
+Request (Client):
+    {
+        "tag": "client",
+        "rsa_pub_key": "<public_key_pem>",
+        "mission_id": "<uuid>"
+    }
+
+Request (GCS):
+    {
+        "tag": "gcs",
+        "rsa_pub_key": "<public_key_pem>",
+        "gcs_proof_token": "<token>",
+        "mission_group": "<string>"
+    }
+
+Response:
+    {
+        "status": "ok",
+        "token": "<base64_encrypted_token>",
+        "hostname": "<string>",
+        "token_hash": "<string>"
+    }
+
+
+3. POST /delete-vpn-connection
+------------------------------
+Removes an existing VPN connection from the system and deactivates the Tailscale device.
+
+Request:
+    {
+        "hostname": "<string>",
+        "token_hash": "<string>"
+    }
+
+Response:
+    {
+        "status": "ok"
+    }
+
+
+4. POST /start-session
+----------------------
+Starts a new flight session within a mission.
+
+Request:
+    {
+        "gcs_proof_token": "<token>",
+        "session_id": "<uuid>",
+        "mission_id": "<uuid>"
+    }
+
+Response:
+    {
+        "status": "ok"
+    }
+
+
+5. POST /close-session
+----------------------
+Closes an active session and updates its status to either "finished" or "aborted".
+
+Request:
+    {
+        "session_id": "<uuid>",
+        "result": "finished" | "aborted",
+        "gcs_proof_token": "<token>"
+    }
+
+Response:
+    {
+        "status": "ok"
+    }

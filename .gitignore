@@ -1,5 +1,5 @@
 venv/
 /.env
 logs/
-__pycache__/
+*cache*/
 *token*.txt

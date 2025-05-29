@@ -56,7 +56,11 @@ def get_vpn_connection():
     public_pem = data.get("rsa_pub_key")
     if not public_pem:
         return jsonify({"status": "error", "reason": "Missing public key"}), 400
-    public_key = serialization.load_pem_public_key(public_pem.encode())
+
+    try:
+        public_key = serialization.load_pem_public_key(public_pem.encode())
+    except ValueError:
+        return jsonify({"status": "error", "reason": "Invalid public key format"}), 400
 
     tag = data.get("tag")
 

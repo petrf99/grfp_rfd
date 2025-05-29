@@ -1,0 +1,69 @@
+RFD Mission Manager - Database Schema Overview
+==============================================
+
+This document describes the structure and purpose of the versioned PostgreSQL tables 
+used in the RFD Mission Manager service.
+
+All tables use a versioning pattern, with `valid_from` and `valid_to` fields indicating 
+the time range when a row is valid. A row with `valid_to = NULL` is considered the current version.
+
+Tables
+------
+
+1. grfp_missions
+-----------------
+- Represents individual missions created by users.
+- Fields:
+    - mission_id (UUID): Unique identifier for the mission.
+    - mission_group (VARCHAR): Logical group the mission belongs to (default: 'default').
+    - user_id (VARCHAR): ID of the user who created the mission.
+    - location (VARCHAR): Description of the mission location.
+    - time_window (VARCHAR): Desired time window for the mission.
+    - drone_type (VARCHAR): Type of drone required.
+    - status (VARCHAR): Current mission status ('new' by default).
+    - parameters (JSONB): Arbitrary parameters for mission configuration.
+    - created_at (TIMESTAMPTZ): Record creation timestamp.
+    - valid_from (TIMESTAMPTZ): Start of this version's validity.
+    - valid_to (TIMESTAMPTZ): End of this version's validity (NULL if current).
+
+2. grfp_mission_groups
+------------------------
+- Stores metadata about mission groups, which organize related missions.
+- Fields:
+    - mission_group (VARCHAR): Group name.
+    - parameters (JSONB): Metadata or rules associated with the group.
+    - created_at, valid_from, valid_to: Version tracking fields.
+
+3. grfp_drone_types
+--------------------
+- Contains registered drone types available for missions.
+- Fields:
+    - drone_type_id (INT): Unique ID for the drone type.
+    - drone_type_name (VARCHAR): Human-readable name.
+    - status (VARCHAR): Availability status.
+    - specification (JSONB): Specifications in structured format.
+    - created_at, valid_from, valid_to: Version tracking fields.
+
+4. grfp_locations
+------------------
+- Lists available or known locations for flight operations.
+- Fields:
+    - location_id (INT): Unique identifier for location.
+    - location_name (VARCHAR): Name of the location.
+    - location_description (VARCHAR): Additional location info.
+    - status (VARCHAR): Status of location (e.g., available, restricted).
+    - created_at, valid_from, valid_to: Version tracking fields.
+
+Indexing
+--------
+Each table includes a unique index for quickly identifying the active (valid_to IS NULL) version.
+
+Default Data
+------------
+- A default entry is inserted into `grfp_mission_groups` during database initialization 
+  if no groups exist.
+
+Usage
+-----
+The schema supports historical tracking of changes to mission definitions, drone types, and
+locations while maintaining clean querying for current data.

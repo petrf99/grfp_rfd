@@ -14,10 +14,12 @@ from rfd.connections_manager.cleaner import cleaner
 
 from rfd.connections_manager.db_init import db_init
 
+# Add db cleaner job (delete sessions those weren't terminated correctly)
 scheduler = BackgroundScheduler()
 scheduler.add_job(cleaner, "interval", seconds=CLEANER_INTERVAL)
 scheduler.start()
 
+# Add endpoints
 app.add_url_rule("/register-gcs", view_func=register_gcs, methods=["POST"])
 app.add_url_rule("/get-vpn-connection", view_func=get_vpn_connection, methods=["POST"])
 app.add_url_rule("/delete-vpn-connection", view_func=delete_vpn_connection, methods=["POST"])

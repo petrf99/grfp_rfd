@@ -1,0 +1,116 @@
+
+RFD Connections Manager - HTTP API Reference
+===========================================
+
+This document describes the endpoints available in the RFD Connections Manager server,
+which is responsible for handling GCS registration, VPN credential distribution,
+and session lifecycle management.
+
+Base URL:
+---------
+http://<rfd_host>:8001
+
+Endpoints:
+----------
+
+1. POST /register-gcs
+---------------------
+Description:
+    Registers a Ground Control Station (GCS) with the system. This must be done before starting a session.
+
+Request JSON:
+    {
+        "gcs_id": "<unique_id>",
+        "hostname": "<tailscale_hostname>",
+        "token_hash": "<sha256_uppercase>"
+    }
+
+Response:
+    {
+        "status": "ok"
+    }
+
+2. POST /get-vpn-connection
+---------------------------
+Description:
+    Requests VPN credentials for a client to establish a Tailscale connection.
+
+Request JSON:
+    {
+        "tag": "client",
+        "rsa_pub_key": "<public_key_pem>",
+        "mission_id": "<uuid>"
+    }
+
+Response:
+    {
+        "token": "<base64_encrypted_token>",
+        "hostname": "<client_hostname>",
+        "token_hash": "<sha256_uppercase>"
+    }
+
+3. POST /delete-vpn-connection
+------------------------------
+Description:
+    Deletes VPN credentials for a disconnected client.
+
+Request JSON:
+    {
+        "hostname": "<client_hostname>",
+        "token_hash": "<sha256_uppercase>"
+    }
+
+Response:
+    {
+        "status": "ok"
+    }
+
+4. POST /start-session
+----------------------
+Description:
+    Marks a session as started. Associates the session with a client and a GCS.
+
+Request JSON:
+    {
+        "session_id": "<uuid>",
+        "mission_id": "<uuid>",
+        "client_hostname": "<string>",
+        "gcs_hostname": "<string>"
+    }
+
+Response:
+    {
+        "status": "ok"
+    }
+
+5. POST /close-session
+----------------------
+Description:
+    Closes an active session and marks it with its final state (finished/aborted).
+
+Request JSON:
+    {
+        "session_id": "<uuid>",
+        "result": "finish" | "abort"
+    }
+
+Response:
+    {
+        "status": "ok"
+    }
+
+Scheduler:
+----------
+A background job runs every 180 seconds to clean up expired or inactive sessions.
+This is handled by `rfd.connections_manager.cleaner.cleaner()`.
+
+Initialization:
+---------------
+At startup, the server initializes the required tables using:
+    - `rfd.connections_manager.db_init.db_init()`
+
+Logging:
+--------
+Logs are handled by a dedicated logger named "RFD_CM_Server".
+
+Last updated: 2025-05-29 14:43:48

@@ -1,5 +1,6 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -16,10 +17,9 @@ DB_CONFIG = {
 }
 
 def get_conn():
+    """Create a new connection to the PostgreSQL database using environment config."""
     return psycopg2.connect(**DB_CONFIG)
 
-
-from datetime import datetime, timezone
 
 def update_versioned(
     conn,
@@ -28,18 +28,25 @@ def update_versioned(
     update_fields: dict,
 ):
     """
-    Обновляет версионную таблицу по нескольким ключевым полям.
-    - Закрывает текущую версию (valid_to)
-    - Вставляет новую строку (valid_from = now, valid_to = NULL)
+    Perform a versioned update on a table:
+    - Close the current active record (set `valid_to`)
+    - Copy the latest row and apply updates
+    - Insert the new version with updated fields and current timestamp
+
+    Args:
+        conn: Active psycopg2 connection
+        table (str): Table name
+        key_fields (dict): Dict of primary key fields to locate the current row
+        update_fields (dict): Fields to update in the new version
     """
     now = datetime.now(timezone.utc)
 
-    # Список условий и значений для WHERE
+    # WHERE clause setup for key fields
     where_clauses = [f"{field} = %s" for field in key_fields]
     where_sql = " AND ".join(where_clauses)
     key_values = list(key_fields.values())
 
-    # 1. Закрываем текущую активную запись
+    # Step 1: Close the current active version (if any)
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -55,7 +62,7 @@ def update_versioned(
     except psycopg2.errors.UndefinedColumn as e:
         raise RuntimeError(f"Column not found: {e}")
 
-    # 2. Получаем последнюю версию
+    # Step 2: Retrieve the most recent version (latest valid_from)
     with conn.cursor() as cur:
         cur.execute(
             f"""
@@ -72,15 +79,14 @@ def update_versioned(
             return
         desc = [d.name for d in cur.description]
 
-    # 3. Создаём новую строку
+    # Step 3: Construct the new row
     new_row = dict(zip(desc, last_row))
     new_row.update(update_fields)
-
     new_row["valid_from"] = now
     new_row["valid_to"] = None
-    new_row.pop("id", None)
+    new_row.pop("id", None)  # ID is typically auto-incremented
 
-    # Подготовка к INSERT
+    # INSERT new versioned row
     columns = ', '.join(new_row.keys())
     placeholders = ', '.join(['%s'] * len(new_row))
     values = list(new_row.values())

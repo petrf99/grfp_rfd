@@ -5,17 +5,19 @@ import os
 from tech_utils.logger import init_logger
 logger = init_logger("RFD_CM_TSmanager")
 
-# === Settings ===
+# === Load API credentials from environment variables ===
 TAILSCALE_API_KEY = os.getenv("TAILSCALE_API_KEY")
 TAILNET = os.getenv("TAILNET")
 
-
-
-# === Tailscale OAuth ===
+# === Token caching for Tailscale OAuth API ===
 _cached_token = None
 _token_expires_at = 0
 
 def get_access_token():
+    """
+    Get an OAuth access token for the Tailscale API using client credentials grant.
+    Token is cached until expiration to avoid unnecessary requests.
+    """
     global _cached_token, _token_expires_at
 
     if _cached_token and time.time() < _token_expires_at:
@@ -30,14 +32,16 @@ def get_access_token():
     data = resp.json()
 
     _cached_token = data["access_token"]
-    _token_expires_at = time.time() + data["expires_in"] - 30  # a bit earlier
+    _token_expires_at = time.time() + data["expires_in"] - 30  # expire slightly early for safety
     return _cached_token
-
 
 
 # === Tailnet management functions ===
 
 def get_devices():
+    """
+    Get the list of devices currently connected to the Tailnet.
+    """
     url = f"https://api.tailscale.com/api/v2/tailnet/{TAILNET}/devices"
     headers = {
         "Authorization": f"Bearer {get_access_token()}"
@@ -47,7 +51,6 @@ def get_devices():
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         data = response.json()
-        #logger.debug(f"[Tailscale] get_devices response: {data}")
         devices = data.get("devices", [])
 
         if not isinstance(devices, list):
@@ -63,8 +66,10 @@ def get_devices():
     return []  # fallback
 
 
-
 def get_auth_keys():
+    """
+    Retrieve all authentication keys (auth keys) associated with the Tailnet.
+    """
     url = f"https://api.tailscale.com/api/v2/tailnet/{TAILNET}/keys"
     auth = (TAILSCALE_API_KEY, "")
 
@@ -72,7 +77,6 @@ def get_auth_keys():
         response = requests.get(url, auth=auth)
         response.raise_for_status()
         data = response.json()
-        #logger.debug(f"[Tailscale] get_auth_keys response: {data}")
         keys = data.get("keys", [])
         auth_keys = [key for key in keys if key.get("keyType") == "auth"]
         return auth_keys
@@ -85,12 +89,13 @@ def get_auth_keys():
     return []  # fallback
 
 
-
 def delete_device(device_id):
+    """
+    Remove a device from the Tailnet by its device ID.
+    """
     url = f"https://api.tailscale.com/api/v2/device/{device_id}"
-
     headers = {
-    "Authorization": f"Bearer {get_access_token()}"
+        "Authorization": f"Bearer {get_access_token()}"
     }
 
     response = requests.delete(url, headers=headers)
@@ -103,32 +108,38 @@ def delete_device(device_id):
 
 
 def delete_auth_key(key_id):
+    """
+    Delete an authentication key by its ID.
+    """
     url = f"https://api.tailscale.com/api/v2/tailnet/{TAILNET}/keys/{key_id}"
-
     auth = (TAILSCALE_API_KEY, "")
 
-    response = requests.delete(url, auth=auth)#, headers=headers)
+    response = requests.delete(url, auth=auth)
     if response.status_code == 200:
         logger.info(f"Authkey {key_id} deleted.")
         return True
     elif response.status_code == 404:
-        #print("Authkey {key_id} doesn't exist.")
         logger.error(f"Authkey {key_id} doesn't exist.")
         return False
     else:
-        #print(f"Error while deleting authkey {key_id}: {response.status_code} {response.text}")
         logger.error(f"Error while deleting authkey {key_id}: {response.status_code} {response.text}")
         return False
 
 
 def remove_from_tailnet(target_hostname):
+    """
+    Remove all devices and auth keys associated with a specific hostname from the Tailnet.
+    """
     logger.info(f"Start removing {target_hostname} from Tailnet")
+    
+    # Fetch current devices and auth keys
     devices = get_devices()
     authkeys = get_auth_keys()
-    #print(f"######### {authkeys}")
+
     deleted_dev = 0
     deleted_keys = 0
 
+    # Delete matching devices
     for d in devices:
         hostname = d.get("hostname", "")
         if hostname == target_hostname:
@@ -137,6 +148,7 @@ def remove_from_tailnet(target_hostname):
             if delete_device(device_id):
                 deleted_dev += 1
 
+    # Delete matching auth keys
     for key in authkeys:
         desc = key.get("description", "")
         key_id = key.get("id")

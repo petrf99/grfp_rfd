@@ -29,11 +29,11 @@ def clean_session(session_id, result):
                     status = row[0]
                 else:
                     logger.error(f"Session {session_id} not found")
-                    return
+                    return False
 
                 if status != 'in progress':
                     logger.error(f"Session {session_id} is not in progress")
-                    return
+                    return False
 
                 # Get hostname of the VPN connection associated with the session
                 cur.execute(f"""
@@ -59,7 +59,7 @@ def clean_session(session_id, result):
 
         logger.info(f"Session {session_id} cleaned. Hostname {vpn_hostname} removed from Tailnet")
 
-        return
+        return True
     
     except Exception as e:
         logger.exception(f"clean_session for session {session_id} failed with exception {e}")
@@ -93,7 +93,21 @@ def cleaner():
                 """)
                 sessions1 = cur.fetchall()
 
+                # Combine session IDs to clean
+                to_delete = {row[0] for row in sessions1}
+
+                # Clean each session
+                logger.info("Start cleaning sessions")
+                counter = 0
+                if to_delete:
+                    for sess in to_delete:
+                        counter += clean_session(sess, 'abort')
+                    logger.info(f"cleaned {len(to_delete)} sessions\n")
+                else:
+                    logger.info("No sessions to clean")
+
                 # Find expired VPN connections associated with sessions
+                logger.info("Start cleaning VPN connections")
                 cur.execute("""
                     SELECT parent_id
                     FROM vpn_connections
@@ -104,16 +118,11 @@ def cleaner():
                 """)
                 sessions2 = cur.fetchall()
 
-                # Combine session IDs to clean
-                to_delete = {row[0] for row in sessions1 + sessions2}
-
-                # Clean each session
-                if to_delete:
-                    for sess in to_delete:
-                        clean_session(sess, 'abort')
-                    logger.info(f"cleaned {len(to_delete)} sessions\n")
-                else:
-                    logger.info("No sessions to clean")
+                for row in sessions2:
+                    id = row[0]
+                    update_versioned(conn, 'vpn_connections', {'parent_id': id}, {'is_active_flg': False})
+                logger.info("Cleaning VPN connections finished")
+                
 
     except Exception as e:
         logger.error(f"[!] Error cleaner job: {e}\n")

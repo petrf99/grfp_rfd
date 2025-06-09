@@ -50,12 +50,15 @@ def test_clean_session_wrong_status(mock_get_conn):
 
 # === Tests for cleaner ===
 
+@patch("rfd.connections_manager.cleaner.update_versioned")
 @patch("rfd.connections_manager.cleaner.clean_session")
 @patch("rfd.connections_manager.cleaner.get_conn")
-def test_cleaner_with_sessions(mock_get_conn, mock_clean_session):
-    # Simulate duplicate and expired sessions to be cleaned
+def test_cleaner_with_sessions(mock_get_conn, mock_clean_session, mock_update_versioned):
     mock_cursor = MagicMock()
-    mock_cursor.fetchall.side_effect = [[("session1",), ("session2",)], [("session2",), ("session3",)]]
+    mock_cursor.fetchall.side_effect = [
+        [("session1",), ("session2",)],  # duplicate sessions
+        [("session2",), ("session3",)]   # expired VPNs
+    ]
     mock_conn = MagicMock()
     mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
     mock_get_conn.return_value.__enter__.return_value = mock_conn
@@ -63,10 +66,18 @@ def test_cleaner_with_sessions(mock_get_conn, mock_clean_session):
     from rfd.connections_manager.cleaner import cleaner
     cleaner()
 
-    # Sessions should be cleaned once each despite duplicates
-    assert mock_clean_session.call_count == 3
+    # Test call of clean_session
+    assert mock_clean_session.call_count == 2
     cleaned_ids = {call.args[0] for call in mock_clean_session.call_args_list}
-    assert cleaned_ids == {"session1", "session2", "session3"}
+    assert cleaned_ids == {"session1", "session2"}
+
+    # Test update_versioned for expired VPNs
+    vpn_calls = [
+        call.args for call in mock_update_versioned.call_args_list
+        if call.args[0] == mock_conn and call.args[1] == 'vpn_connections'
+    ]
+    updated_ids = {kwargs[2]['parent_id'] for kwargs in vpn_calls}
+    assert updated_ids == {"session2", "session3"}
 
 
 @patch("rfd.connections_manager.cleaner.clean_session")

@@ -5,3 +5,5 @@ psycopg2
 apscheduler
 cryptography
 pytest
+bcrypt
+pyjwt

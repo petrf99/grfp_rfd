@@ -21,6 +21,8 @@ def reset_db():
                     DROP TABLE IF EXISTS grfp_sessions;
                             
                     DROP TABLE IF EXISTS vpn_connections;
+
+                    DROP TABLE IF EXISTS users;
                     """)
                 conn.commit()
                 logger.info("Tables have been dropped")

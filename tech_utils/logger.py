@@ -1,4 +1,5 @@
 import logging
+from logging.handlers import RotatingFileHandler
 import sys
 import os
 from pathlib import Path
@@ -45,7 +46,11 @@ def init_logger(name: str = "App") -> logging.Logger:
     if to_file:
         log_path = Path(to_file).expanduser().resolve()
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        fh = logging.FileHandler(log_path)
+        fh = RotatingFileHandler(
+            log_path,
+            maxBytes=10 * 1024 * 1024,  # 10 MB
+            backupCount=5              # Keep 5 backups
+        )
         fh.setFormatter(formatter)
         handlers.append(fh)
 

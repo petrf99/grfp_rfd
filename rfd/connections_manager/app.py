@@ -30,7 +30,7 @@ def main():
     logger.info("DB init")
     db_init()
     logger.info("Starting server")
-    app.run(host="0.0.0.0", port=8001)
+    app.run(host="127.0.0.1", port=8001)
 
 if __name__ == "__main__":
     main()

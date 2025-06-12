@@ -1,7 +1,9 @@
 from flask import Flask, request, jsonify
 
 from tech_utils.db import get_conn, update_versioned, RealDictCursor
-from tech_utils.email_utils import send_email, ground_teams_email
+from tech_utils.email_utils import send_email
+from rfd.config import GROUND_TEAMS_EMAIL, RFD_ADMIN_EMAIL
+from rfd.auth.require_auth_dec import require_auth
 import uuid
 
 from tech_utils.logger import init_logger
@@ -51,10 +53,10 @@ def mission_request():
         # Notify ground teams via email
         subject = f"[GRFP] New Mission Request: {mission_id}"
         body = "\n".join([f"{k}: {data[k]}" for k in required])
-        send_email(subject, body, ground_teams_email)
-        logger.info(f"Email sent to ground teams: {ground_teams_email}")
+        send_email(subject, body, GROUND_TEAMS_EMAIL)
+        logger.info(f"Email sent to ground teams: {GROUND_TEAMS_EMAIL}")
 
-        return jsonify({"status": "ok"})
+        return jsonify({"status": "ok", "mission_id": mission_id}), 200
 
     except Exception as e:
         logger.error(f"Error creating mission {mission_id}: {e}", exc_info=True)
@@ -62,6 +64,7 @@ def mission_request():
 
 
 # === Endpoint to create a new mission group ===
+@require_auth(allowed_emails=[RFD_ADMIN_EMAIL, GROUND_TEAMS_EMAIL])
 def mission_group_request():
     logger.info("Mission group request received")
     data = request.get_json()
@@ -92,7 +95,7 @@ def mission_group_request():
                 conn.commit()
 
         logger.info(f"Mission group request processed: {mission_group}")
-        return jsonify({"status": "ok"})
+        return jsonify({"status": "ok"}), 200
 
     except Exception as e:
         logger.error(f"Error creating mission group {mission_group}: {e}", exc_info=True)
@@ -100,6 +103,7 @@ def mission_group_request():
 
 
 # === Endpoint to change the status of an existing mission ===
+#@require_auth(allowed_emails=[RFD_ADMIN_EMAIL, GROUND_TEAMS_EMAIL])
 def change_mission_status():
     logger.info(f"change-mission-status request received")
     data = request.get_json()
@@ -120,10 +124,10 @@ def change_mission_status():
         # Send status update email
         subject = f"[GRFP] Mission Status Changed"
         body = "\n".join([data['mission_id'] + '\n', 'New status:', data['new_status']])
-        send_email(subject, body, ground_teams_email)
-        logger.info(f"Email sent to ground teams: {ground_teams_email}")
+        send_email(subject, body, GROUND_TEAMS_EMAIL)
+        logger.info(f"Email sent to ground teams: {GROUND_TEAMS_EMAIL}")
 
-        return jsonify({"status": "ok"})
+        return jsonify({"status": "ok"}), 200
     except Exception as e:
         logger.error(f"Error changing mission status {data['mission_id']}: {e}", exc_info=True)
         return jsonify({"status": "error", "reason": "DB insert error"}), 500
@@ -132,9 +136,14 @@ def change_mission_status():
 
 
 # === Endpoint to retrieve a list of missions ===
+@require_auth(allowed_emails=None)
 def get_missions_list():
     logger.info(f"get-missions-list request received")
     data = request.get_json(silent=True) or {}
+
+    required = ['user_id', 'mission_group']
+    if not any(field in required for field in data):
+        return jsonify({"status": "error", "reason": "Provide user_id or mission_group"}), 400 
 
     # Default condition: only active missions
     where_clauses = ["valid_to IS NULL"]
@@ -143,11 +152,15 @@ def get_missions_list():
     # Optional filters
     if "user_id" in data:
         where_clauses.append("user_id = %s")
-        args.append(data["user_id"])
+        args.append(str(data["user_id"]))
 
     if "mission_group" in data:
         where_clauses.append("mission_group = %s")
-        args.append(data["mission_group"])
+        args.append(str(data["mission_group"]))
+
+    if "status" in data:
+        where_clauses.append("status = %s")
+        args.append(str(data["status"]))
 
     where_sql = " AND ".join(where_clauses)
 
@@ -164,7 +177,7 @@ def get_missions_list():
                 rows = cur.fetchall()
                 logger.info("Successfully fetched missions list")
 
-        return jsonify({'status': 'ok', 'data': rows})
+        return jsonify({'status': 'ok', 'data': rows}), 200
 
     except Exception as e:
         logger.error(f"Error in getting missions list: {e}", exc_info=True)

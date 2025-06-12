@@ -21,15 +21,17 @@ def register():
     logger.info("Register request received")
     data = request.get_json()
     if "email" in data and re.match(r"[^@]+@[^@]+\.[^@]+", data.get('email')) and "password" in data:
-        email, password = extract_credentials(data)
+        email, password, error = extract_credentials(data)
+        if error:
+            return jsonify({"status": "error", "reason": error}), 400
 
         res = register_user(email, password)
         if res == True:
             return jsonify({"status": "ok"}), 200
-        elif res == False:
+        elif res is None:
             return jsonify({"status": "error", "reason": "Internal server error"}), 500
-        else:
-            return jsonify({"status": "error", "reason": res}), 400
+        elif res == False:
+            return jsonify({"status": "error", "reason": f"Email {email} already exists"}), 400
     else:
         return jsonify({"status": "error", "reason": "Missing fields"}), 400
 
@@ -38,11 +40,15 @@ def login():
     logger.info("Login request received")
     data = request.get_json()
     if "email" in data and re.match(r"[^@]+@[^@]+\.[^@]+", data.get('email')) and "password" in data:
-        email, password = extract_credentials(data)
+        email, password, error = extract_credentials(data)
+        if error:
+            return jsonify({"status": "error", "reason": error}), 400
 
         jwt = login_user(email, password)
         if jwt:
             return jsonify({"status": "ok", "jwt": jwt}), 200
+        elif jwt == False:
+            return jsonify({"status": "error", "reason": f"Login failed"}), 400
         else:
             return jsonify({"status": "error", "reason": "Internal server error"}), 500
     else:

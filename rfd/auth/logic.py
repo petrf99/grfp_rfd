@@ -46,8 +46,8 @@ def register_user(email: str, password: str) -> bool:
             )
             row = cur.fetchone()
             if row:
-                logger.error(f"Email {email} already exists")
-                return f"Email {email} already exists"
+                logger.warning(f"Email {email} already exists")
+                return False
             cur.execute(
                 'INSERT INTO users (email, password_hash, auth_provider) VALUES (%s, %s, %s)',
                 (email, password_hash, 'local')
@@ -57,7 +57,7 @@ def register_user(email: str, password: str) -> bool:
         return True
     except Exception as e:
         logger.error(f"Registration error for {email} - {e}")
-        return False
+        return None
     finally:
         conn.close()
 
@@ -75,17 +75,19 @@ def login_user(email: str, password: str) -> str | None:
             )
             row = cur.fetchone()
             if not row:
-                logger.error(f"Login error failed: Email {email} not found")
-                return None
+                logger.warning(f"Login error failed: Email {email} not found")
+                return False
 
             user_id, password_hash = row
             if bcrypt.checkpw(password.encode(), password_hash.encode()):
                 logger.info(f"{email} log in")
                 return generate_jwt(user_id, email)
             else:
-                return None
+                logger.warning(f"Invalid password for {email} login")
+                return False
     except Exception as e:
         logger.error(f"Login failed for {email} - {e}")
+        return None
     finally:
         conn.close()
 

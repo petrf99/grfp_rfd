@@ -40,7 +40,7 @@ def register_gcs():
         f.write(gcs_proof_token + "\n")
 
     logger.info("GCS registered successfully")
-    return jsonify({"status": "ok", "gcs_proof_token": gcs_proof_token})
+    return jsonify({"status": "ok", "gcs_proof_token": gcs_proof_token}), 200
 
 # === Endpoint to request VPN connection for a client or GCS ===
 def get_vpn_connection():
@@ -134,7 +134,7 @@ def get_vpn_connection():
                 encrypted_b64 = base64.b64encode(encrypted_token).decode()
 
         logger.info(f"get-vpn-connection succeeded for {hostname}")
-        return jsonify({"status": "ok", "token": encrypted_b64, "hostname": hostname, "token_hash": token_hash})
+        return jsonify({"status": "ok", "token": encrypted_b64, "hostname": hostname, "token_hash": token_hash}), 200
 
     except Exception as e:
         logger.error(f"Exception in get-vpn-connection: {e}", exc_info=True)

@@ -16,6 +16,7 @@ def db_init():
                         id SERIAL PRIMARY KEY,
                         mission_id UUID NOT NULL,                            -- Mission UUID
                         mission_group VARCHAR DEFAULT 'default',             -- Group name
+                        mission_type VARCHAR(255),                           -- Type of the mission
                         user_id VARCHAR(255),                                -- Creator user ID
                         location VARCHAR(255),                               -- Location (free text)
                         time_window VARCHAR(255),                            -- Time range (free text)

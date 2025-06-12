@@ -1,5 +1,5 @@
 from functools import wraps
-from flask import request, jsonify
+from flask import request, jsonify, g
 from rfd.auth.logic import verify_jwt
 
 def require_auth(allowed_emails=None):
@@ -15,7 +15,7 @@ def require_auth(allowed_emails=None):
             if not payload:
                 return jsonify({"error": "Invalid or expired token"}), 401
 
-            request.user = payload
+            g.user = payload 
 
             # Проверка по email
             if allowed_emails:

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, g
 
 from tech_utils.db import get_conn, update_versioned, RealDictCursor
 from tech_utils.email_utils import send_email
@@ -11,31 +11,50 @@ logger = init_logger("RFD_MM_Endpoints")
 
 
 # === Endpoint to create a new mission ===
+#@require_auth(allowed_emails = None) - TBD: require auth
 def mission_request():
     mission_id = str(uuid.uuid4())  # Generate a unique mission ID
     logger.info(f"mission-request request received {mission_id}")
     data = request.get_json()
 
     # Check for required fields
-    required = ["user_id", "location", "time_window", "drone_type"]
+    required = ["location", "time_window", "drone_type"]
     if not data or not all(k in data for k in required):
         return jsonify({"status": "error", "reason": "Missing parameters"}), 400
+
+    # User ID extraction - to be replaced with JWT data
+    if not 'user_id' in data and not 'email' in data:
+        return jsonify({"status": "error", "reason": "User_id or email required"}), 400
+    elif not 'user_id' in data:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT user_id FROM users WHERE email = %s', (data.get('email'), ))
+                row = cur.fetchone()
+                if not row:
+                    return jsonify({"status": "error", "reason": "User with given email not found"}), 404 
+                user_id = str(row[0])
+    else:
+        user_id = str(data.get('user_id'))
 
     # Prepare values for SQL INSERT
     columns = ['mission_id']
     placeholders = ['%s']
     values = [mission_id]  
 
-    # Optional field
+    # Optional fields
     if "mission_group" in data:
         columns.append('mission_group')
         placeholders.append('%s')
         values.append(data["mission_group"])
+    if "mission_type" in data:
+        columns.append('mission_type')
+        placeholders.append('%s')
+        values.append(data["mission_type"])
 
     # Add required fields
     columns += ['user_id', 'location', 'time_window', 'drone_type']
     placeholders += ['%s'] * 4
-    values += [data['user_id'], data["location"], data["time_window"], data["drone_type"]]
+    values += [user_id, data["location"], data["time_window"], data["drone_type"]]
 
     try:
         # Insert into database
@@ -136,12 +155,12 @@ def change_mission_status():
 
 
 # === Endpoint to retrieve a list of missions ===
-@require_auth(allowed_emails=None)
+#@require_auth(allowed_emails=None) - TBD: Require Auth
 def get_missions_list():
     logger.info(f"get-missions-list request received")
     data = request.get_json(silent=True) or {}
 
-    required = ['user_id', 'mission_group']
+    required = ['user_id', 'email', 'mission_group']
     if not any(field in required for field in data):
         return jsonify({"status": "error", "reason": "Provide user_id or mission_group"}), 400 
 
@@ -153,6 +172,15 @@ def get_missions_list():
     if "user_id" in data:
         where_clauses.append("user_id = %s")
         args.append(str(data["user_id"]))
+    elif "email" in data:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT user_id FROM users WHERE email = %s', (data.get('email'), ))
+                row = cur.fetchone()
+                if not row:
+                    return jsonify({"status": "error", "reason": "User with given email not found"}), 404 
+                where_clauses.append("user_id = %s")
+                args.append(str(row[0]))
 
     if "mission_group" in data:
         where_clauses.append("mission_group = %s")

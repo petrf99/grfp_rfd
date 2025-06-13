@@ -18,12 +18,17 @@ def init_db():
     try:
         with conn.cursor() as cur:
             cur.execute('''
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id SERIAL PRIMARY KEY,
+                CREATE TABLE IF NOT EXISTS grfp_users (
+                    id SERIAL PRIMARY KEY,                             -- уникальный ID строки
                     email TEXT UNIQUE NOT NULL,
                     auth_provider TEXT,
-                    password_hash TEXT
-                )
+                    password_hash TEXT,
+                    valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),        -- Versioning start timestamp
+                    valid_to TIMESTAMPTZ DEFAULT NULL,                    -- Versioning end timestamp (null = current version)
+                    UNIQUE (email, valid_from)
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_active_email ON grfp_users(email)
+                    WHERE valid_to IS NULL;
             ''')
         conn.commit()
     except Exception as e:
@@ -41,7 +46,7 @@ def register_user(email: str, password: str) -> bool:
         conn = get_conn()
         with conn.cursor() as cur:
             cur.execute(
-                'SELECT user_id FROM users WHERE email = %s',
+                'SELECT id FROM grfp_users WHERE email = %s',
                 (email,)
             )
             row = cur.fetchone()
@@ -49,7 +54,7 @@ def register_user(email: str, password: str) -> bool:
                 logger.warning(f"Email {email} already exists")
                 return False
             cur.execute(
-                'INSERT INTO users (email, password_hash, auth_provider) VALUES (%s, %s, %s)',
+                'INSERT INTO grfp_users (email, password_hash, auth_provider) VALUES (%s, %s, %s)',
                 (email, password_hash, 'local')
             )
         conn.commit()
@@ -70,7 +75,7 @@ def login_user(email: str, password: str) -> str | None:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                'SELECT user_id, password_hash FROM users WHERE email = %s',
+                'SELECT password_hash FROM grfp_users WHERE email = %s',
                 (email,)
             )
             row = cur.fetchone()
@@ -78,10 +83,10 @@ def login_user(email: str, password: str) -> str | None:
                 logger.warning(f"Login error failed: Email {email} not found")
                 return False
 
-            user_id, password_hash = row
+            password_hash = row[0]
             if bcrypt.checkpw(password.encode(), password_hash.encode()):
                 logger.info(f"{email} log in")
-                return generate_jwt(user_id, email)
+                return generate_jwt(email)
             else:
                 logger.warning(f"Invalid password for {email} login")
                 return False
@@ -95,9 +100,8 @@ def login_user(email: str, password: str) -> str | None:
 # Генерация и проверка JWT
 # -------------------------------
 
-def generate_jwt(user_id: int, email: str) -> str:
+def generate_jwt(email: str) -> str:
     payload = {
-        'user_id': user_id,
         'email': email,
         'exp': int(time.time()) + JWT_EXP_SECONDS
     }

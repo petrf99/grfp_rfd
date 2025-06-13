@@ -77,40 +77,41 @@ def auth_google():
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT user_id, auth_provider FROM users WHERE email = %s", (email,))
+            cur.execute("SELECT auth_provider FROM grfp_users WHERE email = %s", (email,))
             row = cur.fetchone()
             if row:
-                user_id, provider = row
+                provider = row
                 if provider != 'google':
                     logger.warning(f"Google login attempted for local user {email}")
                     return {"status": "error", "reason": "User is already registered"}, 403
             else:
                 cur.execute("""
-                    INSERT INTO users (email, password_hash, auth_provider)
+                    INSERT INTO grfp_users (email, password_hash, auth_provider)
                     VALUES (%s, NULL, 'google')
                     RETURNING id
                 """, (email,))
-                user_id = cur.fetchone()[0]
                 conn.commit()
     finally:
         conn.close()
 
     # 3. Выдаём JWT
-    jwt = generate_jwt(user_id, email)
+    jwt = generate_jwt(email)
     return jsonify({"status": "ok", "jwt": jwt}), 200
 
 # === Endpoint to delete user ===
 @require_auth(allowed_emails=[RFD_ADMIN_EMAIL])
 def delete_account():
-    user_id = request.user.get('user_id')
+    email = request.user.get('email')
 
-    if not user_id:
-        return jsonify({"error": "Invalid token payload"}), 400
+    if not email:
+        return jsonify({"error": "Missing email"}), 400
 
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
+            cur.execute("""UPDATE grfp_users
+                SET valid_to = now()
+                WHERE email = %s AND valid_to IS NULL""", (email,))
         conn.commit()
         return jsonify({"message": "Account deleted"}), 200
     except Exception as e:

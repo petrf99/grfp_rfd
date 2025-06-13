@@ -17,7 +17,7 @@ def db_init():
                         mission_id UUID NOT NULL,                            -- Mission UUID
                         mission_group VARCHAR DEFAULT 'default',             -- Group name
                         mission_type VARCHAR(255),                           -- Type of the mission
-                        user_id VARCHAR(255),                                -- Creator user ID
+                        email VARCHAR(255),                                  -- Creator's email
                         location VARCHAR(255),                               -- Location (free text)
                         time_window VARCHAR(255),                            -- Time range (free text)
                         drone_type VARCHAR(128),                             -- Type of drone
@@ -47,31 +47,43 @@ def db_init():
                     -- Contains the available drone types with versioned specs
                     CREATE TABLE IF NOT EXISTS grfp_drone_types (
                         id SERIAL PRIMARY KEY,
-                        drone_type_id INT NOT NULL,
-                        drone_type_name VARCHAR(128),
+                        drone_type VARCHAR(128),
                         status VARCHAR(128) DEFAULT 'available',
                         specification JSONB,
                         created_at TIMESTAMPTZ DEFAULT now(),
                         valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
                         valid_to TIMESTAMPTZ DEFAULT NULL,
-                        UNIQUE (drone_type_id, valid_from)
+                        UNIQUE (drone_type, valid_from)
                     );
-                    CREATE UNIQUE INDEX ON grfp_drone_types(drone_type_id) WHERE valid_to IS NULL;
+                    CREATE UNIQUE INDEX ON grfp_drone_types(drone_type) WHERE valid_to IS NULL;
 
                     -- === Locations Table ===
                     -- Lists physical or logical locations where missions can take place
                     CREATE TABLE IF NOT EXISTS grfp_locations (
                         id SERIAL PRIMARY KEY,
-                        location_id INT NOT NULL,
-                        location_name VARCHAR(64),
+                        location VARCHAR(64),
                         location_description VARCHAR(255),
                         status VARCHAR(128) DEFAULT 'available',
                         created_at TIMESTAMPTZ DEFAULT now(),
                         valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
                         valid_to TIMESTAMPTZ DEFAULT NULL,
-                        UNIQUE (location_id, valid_from)
+                        UNIQUE (location, valid_from)
                     );
-                    CREATE UNIQUE INDEX ON grfp_locations(location_id) WHERE valid_to IS NULL;
+                    CREATE UNIQUE INDEX ON grfp_locations(location) WHERE valid_to IS NULL;
+
+                    -- === Mission types Table ===
+                    -- Lists mission types/templates
+                    CREATE TABLE IF NOT EXISTS grfp_mission_types (
+                        id SERIAL PRIMARY KEY,
+                        mission_type VARCHAR(64),
+                        mission_type_description VARCHAR(255),
+                        status VARCHAR(128) DEFAULT 'available',
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        valid_from TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        valid_to TIMESTAMPTZ DEFAULT NULL,
+                        UNIQUE (mission_type, valid_from)
+                    );
+                    CREATE UNIQUE INDEX ON grfp_mission_types(mission_type) WHERE valid_to IS NULL;
                 """)
 
                 # Ensure default mission group exists

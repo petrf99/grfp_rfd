@@ -4,6 +4,7 @@ from tech_utils.db import get_conn, update_versioned, RealDictCursor
 from tech_utils.email_utils import send_email
 from rfd.config import GROUND_TEAMS_EMAIL, RFD_ADMIN_EMAIL
 from rfd.auth.require_auth_dec import require_auth
+import rfd.missions_manager.field_validators as fv
 import uuid
 
 from tech_utils.logger import init_logger
@@ -18,23 +19,17 @@ def mission_request():
     data = request.get_json()
 
     # Check for required fields
-    required = ["location", "time_window", "drone_type"]
+    required = ["time_window", "drone_type"]
     if not data or not all(k in data for k in required):
-        return jsonify({"status": "error", "reason": "Missing parameters"}), 400
+        return jsonify({"status": "error", "reason": "Missing parameters: time_window or drone_type"}), 400
+    if not fv.drone_type_val(data.get("drone_type")):
+        return jsonify({"status": "error", "reason": "Drone type does not exist"}), 404
 
     # User ID extraction - to be replaced with JWT data
-    if not 'user_id' in data and not 'email' in data:
-        return jsonify({"status": "error", "reason": "User_id or email required"}), 400
-    elif not 'user_id' in data:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute('SELECT user_id FROM users WHERE email = %s', (data.get('email'), ))
-                row = cur.fetchone()
-                if not row:
-                    return jsonify({"status": "error", "reason": "User with given email not found"}), 404 
-                user_id = str(row[0])
-    else:
-        user_id = str(data.get('user_id'))
+    if not 'email' in data:
+        return jsonify({"status": "error", "reason": "Email required"}), 400
+    if not fv.email_val(data.get('email')):
+        return jsonify({"status": "error", "reason": "User with given email does not exist"}), 404
 
     # Prepare values for SQL INSERT
     columns = ['mission_id']
@@ -43,18 +38,28 @@ def mission_request():
 
     # Optional fields
     if "mission_group" in data:
+        if not fv.mission_group_val(data.get("mission_group")):
+            return jsonify({"status": "error", "reason": "Mission_group does not exist"}), 404 
         columns.append('mission_group')
         placeholders.append('%s')
-        values.append(data["mission_group"])
+        values.append(data.get("mission_group"))
     if "mission_type" in data:
+        if not fv.mission_type_val(data.get("mission_type")):
+            return jsonify({"status": "error", "reason": "Mission_type does not exist"}), 404 
         columns.append('mission_type')
         placeholders.append('%s')
-        values.append(data["mission_type"])
+        values.append(data.get("mission_type"))
+    if "location" in data:
+        if not fv.location_val(data.get("location")):
+            return jsonify({"status": "error", "reason": "Location does not exist"}), 404 
+        columns.append('location')
+        placeholders.append('%s')
+        values.append(data.get("location"))
 
     # Add required fields
-    columns += ['user_id', 'location', 'time_window', 'drone_type']
-    placeholders += ['%s'] * 4
-    values += [user_id, data["location"], data["time_window"], data["drone_type"]]
+    columns += ['email', 'time_window', 'drone_type']
+    placeholders += ['%s'] * 3
+    values += [data.get("email"), data.get("time_window"), data.get("drone_type")]
 
     try:
         # Insert into database
@@ -160,27 +165,18 @@ def get_missions_list():
     logger.info(f"get-missions-list request received")
     data = request.get_json(silent=True) or {}
 
-    required = ['user_id', 'email', 'mission_group']
+    required = ['email', 'mission_group']
     if not any(field in required for field in data):
-        return jsonify({"status": "error", "reason": "Provide user_id or mission_group"}), 400 
+        return jsonify({"status": "error", "reason": "Provide email or mission_group"}), 400 
 
     # Default condition: only active missions
     where_clauses = ["valid_to IS NULL"]
     args = []
 
     # Optional filters
-    if "user_id" in data:
-        where_clauses.append("user_id = %s")
-        args.append(str(data["user_id"]))
-    elif "email" in data:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute('SELECT user_id FROM users WHERE email = %s', (data.get('email'), ))
-                row = cur.fetchone()
-                if not row:
-                    return jsonify({"status": "error", "reason": "User with given email not found"}), 404 
-                where_clauses.append("user_id = %s")
-                args.append(str(row[0]))
+    if "email" in data:
+        where_clauses.append("email = %s")
+        args.append(str(data["email"]))
 
     if "mission_group" in data:
         where_clauses.append("mission_group = %s")

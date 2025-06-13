@@ -1,7 +1,7 @@
 from tech_utils.db import get_conn
 
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_DBsReset")
+logger = init_logger(name="RFD_DBsReset", component="resets")
 
 
 def reset_db():
@@ -17,12 +17,14 @@ def reset_db():
                     DROP TABLE IF EXISTS grfp_locations;
 
                     DROP TABLE IF EXISTS grfp_mission_groups;
+                            
+                    DROP TABLE IF EXISTS grfp_mission_types;
 
                     DROP TABLE IF EXISTS grfp_sessions;
                             
                     DROP TABLE IF EXISTS vpn_connections;
 
-                    DROP TABLE IF EXISTS users;
+                    DROP TABLE IF EXISTS grfp_users;
                     """)
                 conn.commit()
                 logger.info("Tables have been dropped")

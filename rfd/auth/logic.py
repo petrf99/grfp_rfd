@@ -75,7 +75,7 @@ def login_user(email: str, password: str) -> str | None:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                'SELECT password_hash FROM grfp_users WHERE email = %s',
+                'SELECT password_hash FROM grfp_users WHERE email = %s AND valid_to IS NULL',
                 (email,)
             )
             row = cur.fetchone()

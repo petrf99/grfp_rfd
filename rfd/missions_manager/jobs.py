@@ -1,5 +1,5 @@
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_MM")
+logger = init_logger("Jobs")
 
 from tech_utils.db import get_conn
 from tech_utils.email_utils import send_email, ground_teams_email

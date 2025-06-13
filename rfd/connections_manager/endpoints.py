@@ -4,7 +4,7 @@ from flask import request, jsonify
 import uuid
 
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_CM_Endpoints")
+logger = init_logger(name="CMEndpoints", component="cm")
 
 from tech_utils.db import get_conn, update_versioned
 from rfd.connections_manager.token_manager import create_token

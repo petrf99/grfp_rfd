@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import time
 
-def init_logger(name: str = "App") -> logging.Logger:
+def init_logger(name: str = "App", component: str = None) -> logging.Logger:
     """
     Initialize and configure a logger.
 
@@ -15,12 +15,15 @@ def init_logger(name: str = "App") -> logging.Logger:
     - LOG_TO_FILE    (file path, optional)
     """
     level_str = os.getenv("LOG_LEVEL", "INFO").upper()
-    to_file = os.getenv("LOG_TO_FILE", None)
+    to_file_base = os.getenv("LOG_TO_FILE_BASE", None)
     to_stdout = os.getenv("LOG_TO_STDOUT", "True").lower() in ("1", "true", "yes")
 
     level = getattr(logging, level_str, logging.INFO)
 
-    logger = logging.getLogger(name)
+    if component:
+        logger = logging.getLogger(name + f"_{component}")
+    else:
+        logger = logging.getLogger(name)
     logger.propagate = False  # Prevent logs from being propagated to the root logger
     logger.setLevel(level)
 
@@ -43,8 +46,12 @@ def init_logger(name: str = "App") -> logging.Logger:
         sh.setFormatter(formatter)
         handlers.append(sh)
 
-    if to_file:
-        log_path = Path(to_file).expanduser().resolve()
+    if to_file_base:
+        filename = to_file_base
+        if component:
+            filename += f"_{component}"
+        filename += ".log"
+        log_path = Path(filename).expanduser().resolve()
         log_path.parent.mkdir(parents=True, exist_ok=True)
         fh = RotatingFileHandler(
             log_path,
@@ -57,11 +64,22 @@ def init_logger(name: str = "App") -> logging.Logger:
     for handler in handlers:
         logger.addHandler(handler)
 
-    # Disable werkzeug logging to avoid polluting logs with HTTP noise
-    werkzeug_logger = logging.getLogger('werkzeug')
+    # === Настройка отдельного логгера для werkzeug ===
+    werkzeug_logger = logging.getLogger("werkzeug")
     werkzeug_logger.setLevel(level)
-    werkzeug_logger.handlers = []        # Intentionally left empty — no stdout or file
-    werkzeug_logger.propagate = False    # Don't forward to root logger
+
+    werkzeug_log_path = Path(to_file_base + "_werkzeug.log").resolve()
+    werkzeug_log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    werkzeug_handler = RotatingFileHandler(
+        werkzeug_log_path, maxBytes=5 * 1024 * 1024, backupCount=3
+    )
+    werkzeug_handler.setFormatter(formatter)
+
+    # Удаляем stdout, если был, и вешаем только file-хендлер
+    werkzeug_logger.handlers.clear()
+    werkzeug_logger.addHandler(werkzeug_handler)
+    werkzeug_logger.propagate = False
 
 
     return logger

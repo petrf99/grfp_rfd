@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from tech_utils.logger import init_logger
-logger = init_logger("TechUtils_DB")
+logger = init_logger(name="DB", component="tech_utils")
 
 DB_CONFIG = {
     "dbname": os.getenv("POSTGRES_DB"),

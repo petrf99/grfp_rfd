@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_CM_TokenManager")
+logger = init_logger(name="TokenManager", component="cm")
 
 from rfd.config import TOKEN_EXPIRE_TMP, TAILSCALE_API_KEY, TAILNET
 

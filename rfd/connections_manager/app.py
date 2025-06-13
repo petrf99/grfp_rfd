@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify
 from rfd.connections_manager.endpoints import get_vpn_connection, delete_vpn_connection, start_session, close_session, register_gcs
 
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_CM_Server")
+logger = init_logger(name="Server", component="cm")
 
 from rfd.config import CLEANER_INTERVAL
 

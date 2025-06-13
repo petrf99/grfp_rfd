@@ -1,7 +1,7 @@
 from tech_utils.db import get_conn
 from tech_utils.logger import init_logger
 
-logger = init_logger("RFD_MM_DBinit")
+logger = init_logger(name="DBinit", component="mm")
 
 def db_init():
     # Establish a connection to the PostgreSQL database

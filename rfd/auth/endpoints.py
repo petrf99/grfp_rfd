@@ -7,7 +7,7 @@ from rfd.config import RFD_ADMIN_EMAIL
 from tech_utils.db import get_conn
 from tech_utils.logger import init_logger
 
-logger = init_logger("AuthEndpoints")
+logger = init_logger(name="AuthEndpoints", component="auth")
 
 def extract_credentials(data):
     email = data.get("email")

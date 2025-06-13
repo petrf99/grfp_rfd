@@ -1,5 +1,5 @@
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_CM_Cleaner")
+logger = init_logger(name="Cleaner", component="cm")
 
 from tech_utils.db import get_conn, update_versioned
 from rfd.connections_manager.tailscale_manager import remove_from_tailnet

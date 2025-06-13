@@ -7,7 +7,7 @@ from rfd.auth.require_auth_dec import require_auth
 import uuid
 
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_MM_Endpoints")
+logger = init_logger(name="MMEndpoints", component="mm")
 
 
 # === Endpoint to create a new mission ===

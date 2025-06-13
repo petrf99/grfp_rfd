@@ -7,7 +7,7 @@ from rfd.auth.config import *
 from tech_utils.db import get_conn
 from tech_utils.logger import init_logger
 
-logger = init_logger("AuthLogic")
+logger = init_logger(name="Logic", component="auth")
 
 # -------------------------------
 # Инициализация базы данных

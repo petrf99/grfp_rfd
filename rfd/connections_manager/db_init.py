@@ -1,6 +1,6 @@
 from tech_utils.db import get_conn
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_CM")
+logger = init_logger(name="DBInit", component="cm")
 
 def db_init():
     with get_conn() as conn:

@@ -3,7 +3,7 @@ import time
 import os
 
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_CM_TSmanager")
+logger = init_logger(name="TSmanager", component="cm")
 
 # === Load API credentials from environment variables ===
 TAILSCALE_API_KEY = os.getenv("TAILSCALE_API_KEY")

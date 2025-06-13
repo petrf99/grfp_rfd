@@ -3,12 +3,12 @@ from flask import Flask
 from rfd.missions_manager.endpoints import mission_request, mission_group_request, get_missions_list, change_mission_status
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from rfd.missions_manager.missions_manager import alert_pending_tasks
+from rfd.missions_manager.jobs import alert_pending_tasks
 
 from rfd.missions_manager.db_init import db_init
 
 from tech_utils.logger import init_logger
-logger = init_logger("RFD_MM_Server")
+logger = init_logger(name="Server", component="mm")
 
 app = Flask(__name__)
 

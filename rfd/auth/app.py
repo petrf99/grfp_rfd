@@ -5,7 +5,7 @@ from rfd.auth.logic import init_db, register_user
 from rfd.config import RFD_ADMIN_PASSWORD, RFD_ADMIN_EMAIL
 
 from tech_utils.logger import init_logger
-logger = init_logger("AuthFlaskApp")
+logger = init_logger(name="Server", component="auth")
 
 app = Flask(__name__)
 

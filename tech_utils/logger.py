@@ -68,7 +68,10 @@ def init_logger(name: str = "App", component: str = None) -> logging.Logger:
     werkzeug_logger = logging.getLogger("werkzeug")
     werkzeug_logger.setLevel(level)
 
-    werkzeug_log_path = Path(to_file_base + "_werkzeug.log").resolve()
+    if to_file_base:
+        werkzeug_log_path = Path(to_file_base + "_werkzeug.log").resolve()
+    else:
+        werkzeug_log_path = Path("werkzeug.log").resolve()
     werkzeug_log_path.parent.mkdir(parents=True, exist_ok=True)
 
     werkzeug_handler = RotatingFileHandler(

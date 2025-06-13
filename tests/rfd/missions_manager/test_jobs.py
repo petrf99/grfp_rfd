@@ -1,10 +1,10 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from rfd.missions_manager.missions_manager import alert_pending_tasks  # путь поправь под свой
+from rfd.missions_manager.jobs import alert_pending_tasks  # путь поправь под свой
 
 # === Test when there are pending tasks ===
-@patch("rfd.missions_manager.missions_manager.send_email")
-@patch("rfd.missions_manager.missions_manager.get_conn")
+@patch("rfd.missions_manager.jobs.send_email")
+@patch("rfd.missions_manager.jobs.get_conn")
 def test_alert_pending_tasks_with_new_tasks(mock_get_conn, mock_send_email):
     mock_cursor = MagicMock()
     mock_cursor.fetchall.return_value = [
@@ -26,8 +26,8 @@ def test_alert_pending_tasks_with_new_tasks(mock_get_conn, mock_send_email):
 
 
 # === Test when there are NO pending tasks ===
-@patch("rfd.missions_manager.missions_manager.send_email")
-@patch("rfd.missions_manager.missions_manager.get_conn")
+@patch("rfd.missions_manager.jobs.send_email")
+@patch("rfd.missions_manager.jobs.get_conn")
 def test_alert_pending_tasks_without_tasks(mock_get_conn, mock_send_email):
     mock_cursor = MagicMock()
     mock_cursor.fetchall.return_value = []
@@ -41,8 +41,8 @@ def test_alert_pending_tasks_without_tasks(mock_get_conn, mock_send_email):
 
 
 # === Test exception handling ===
-@patch("rfd.missions_manager.missions_manager.get_conn", side_effect=Exception("DB failure"))
-@patch("rfd.missions_manager.missions_manager.send_email")
+@patch("rfd.missions_manager.jobs.get_conn", side_effect=Exception("DB failure"))
+@patch("rfd.missions_manager.jobs.send_email")
 def test_alert_pending_tasks_db_error(mock_send_email, mock_get_conn):
     # just ensure no exception is raised and nothing is sent
     alert_pending_tasks()
